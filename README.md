@@ -33,7 +33,7 @@ Set a random image with the `earth` keyword: `nasa-wallpaper -w earth -n`
 
 Read the manual: `man nasa-wallpaper` or `nasa-wallpaper -h`
 
-**You can read the all reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki) section**
+**You can read the all reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference) section**
 
 # License
 
