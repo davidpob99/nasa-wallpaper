@@ -5,7 +5,7 @@ NASA Image Library.
 ![iss040e008244](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
 
 # Installation
-## Debian and derivates: 
+## Debian and derivatives: 
 See [releases](https://github.com/davidpob99/nasa-wallpaper/releases) and download the `nasa-wallpaper_1.0_all.deb` file
 
 `$ sudo dpkg -i nasa-wallpaper_1.0_all.deb`
