@@ -23,13 +23,13 @@ Coming soon in the AUR!
 `./nasa-wallpaper`
 
 # Getting started
-Set the APOD image as wallpaper: `nasa-wallpaper -a`
+Set the APOD image as wallpaper (GNOME): `nasa-wallpaper -T gnome -a`
 
-Set the APOD image of the 27th March 1999: `nasa-wallpaper -d 1999-03-27 -a`
+Set the APOD image of the 27th March 1999 (MATE): `nasa-wallpaper -d 1999-03-27 -T mate -a`
 
-Set a random image from the NASA Image Library: `nasa-wallpaper -n`
+Set a random image from the NASA Image Library (LXDE): `nasa-wallpaper -T lxde -n`
 
-Set a random image with the `earth` keyword: `nasa-wallpaper -w earth -n`
+Set a random image with the `earth` keyword (GNOME): `nasa-wallpaper -w earth -T gnome -n`
 
 Read the manual: `man nasa-wallpaper` or `nasa-wallpaper -h`
 
