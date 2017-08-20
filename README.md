@@ -11,7 +11,7 @@ See [releases](https://github.com/davidpob99/nasa-wallpaper/releases) and downlo
 `$ sudo dpkg -i nasa-wallpaper_1.0_all.deb`
 
 ## Arch Linux
-Coming soon in the AUR!
+[AUR](https://aur.archlinux.org/packages/nasa-wallpaper/)
 
 ## With the code
 `git clone https://github.com/davidpob99/nasa-wallpaper`

@@ -101,6 +101,7 @@ while getopts 'd:k:c:p:P:y:Y:e:E:w:i:q:l:t:T: anrvh' opt; do
 				"lxde") pcmanfm --set-wallpaper=$HOME/.nasa-wallpaper/$FECHA.jpg;;
 				"xfce") xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "$HOME/.nasa-wallpaper/$FECHA.jpg";;
 				"mate") gsettings set org.mate.background picture-filename "$HOME/.nasa-wallpaper/$FECHA.jpg";;
+				"feh") feh --bg-scale "$HOME/.nasa-wallpaper/$FECHA.jpg";;
 			esac;;	
 
 		n)	URL="https://images-api.nasa.gov/search?media_type=image"
@@ -154,6 +155,7 @@ while getopts 'd:k:c:p:P:y:Y:e:E:w:i:q:l:t:T: anrvh' opt; do
 				"lxde") pcmanfm --set-wallpaper=$HOME/.nasa-wallpaper/$ID.jpg;;
 				"xfce") xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "$HOME/.nasa-wallpaper/$ID.jpg";;
 				"mate") gsettings set org.mate.background picture-filename "$HOME/.nasa-wallpaper/$ID.jpg";;
+				"feh") feh --bg-scale "$HOME/.nasa-wallpaper/$ID.jpg";;
 			esac;;
 
 		r)	rm 	$HOME/.nasa-wallpaper/*.jpg
