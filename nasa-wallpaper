@@ -8,7 +8,7 @@
 echo -e "Copyright 2017 David Población Criado"
 echo -e "Apache License, Version 2.0\n"
 API_KEY="Z1an39TefCytrrClcLSxNGJDGwv09QLHD6zo74R8"
-VERSION="1.0"
+VERSION="1.1"
 if [ ! -d "$HOME/.nasa-wallpaper/" ]; then
 	mkdir $HOME/.nasa-wallpaper/
 fi

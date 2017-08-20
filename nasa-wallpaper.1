@@ -1,0 +1,75 @@
+.\" Manpage for nasa-wallpaper.
+.TH man 1 "20 Aug 2017" "1.1" "nasa-wallpaper"
+.SH NAME
+nasa-wallpaper
+.SH SYNOPSIS
+nasa-wallpaper <secondary options> [-T TARGET] [main options]
+.SH DESCRIPTION
+nasa-wallpaper is shell program which allows users to change the desktop wallpaper with NASA photographs. If there are more than one photo withe the given options, it will choose a random one.
+.SH TARGET
+Use gnome, cinnamon, lxde, xfce, mate or feh according with your desktop enviroment.
+.SH MAIN OPTIONS
+.B -a
+Use the APOD (Astronomical Picture of the Day). https://apod.nasa.gov/apod/
+
+.B -n
+Use the NASA Image Library. https://images.nasa.gov/
+
+.B -v
+Print the version number.
+
+.B -r
+Delete cache saved in $HOME/.nasa-wallpaper.
+
+.SH SECONDARY OPTIONS
+.B FOR THE APOD IMAGE (-a):
+.IP -d [YYYY-MM-DD]
+Select the date you want to use the APOD of that day.
+
+.IP -k [API_KEY]
+Change the dafault API key. You can get one in https://api.nasa.gov/index.html#apply-for-an-api-key
+
+.PP
+.B FOR THE NASA IMAGE (-n):
+.IP -c [CENTER]
+Select the NASA center which published the media.
+
+.IP -p [PHOTOGRAPHER]
+Select the primary photographer's name.
+
+.IP -P [SECONDARY_CREATOR]
+Select A secondary photographer's name.
+
+.IP -y [YYYY]
+Select the start year for results.
+
+.IP -Y [YYYY]
+Select the end year for results.
+
+.IP -e [EXPLANATION]
+Search words in the picture's explanation. If there is more than one word, use quotes.
+
+.IP -E [SECONDARY_EXPLANATION]
+Just another explanation field.
+
+.IP -w [KEYWORDS]
+Search words in the picture's keywords. If there is more than one word, use commas. DO NOT use spaces.
+
+.IP -i [NASA_ID]
+Select the picture's NASA ID.
+
+.IP -q [GENERAL_SEARCH]
+Free text search terms to compare to all indexed metadata.
+
+.IP -l [LOCATION]
+Search the place where the photo was taken.
+
+.IP -t [TITLE]
+Search words in the title field. DO NOT use spaces.
+
+.SH SEE ALSO
+jq,curl,wget
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+David Población Criado (david.pobcri@educa.jcyl.es)
