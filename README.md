@@ -1,4 +1,10 @@
 # nasa-wallpaper
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=GRXHT9CGJ4L7G)
+[![Website](https://img.shields.io/website-up-down-green-red/http/shields.io.svg?label=my-website)](https://davidpob99.github.io/PolenCyL/)
+
+
 Change your desktop background with a NASA image. You can set an image from both the APOD (Astronomical Picture of the Day) and the 
 NASA Image Library.
 
