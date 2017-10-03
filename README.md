@@ -11,10 +11,13 @@ NASA Image Library.
 ![iss040e008244](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
 
 # Installation
-## Debian and derivatives: 
-See [releases](https://github.com/davidpob99/nasa-wallpaper/releases) and download the `nasa-wallpaper_1.0_all.deb` file
+## Debian and derivatives
 
-`$ sudo dpkg -i nasa-wallpaper_1.0_all.deb`
+1. `sudo apt-get install jq curl git wget`
+2. `git clone https://github.com/davidpob99/nasa-wallpaper`
+3. `cd nasa-wallpaper`
+4. `chmod -x INSTALL`
+5. `sudo sh INSTALL`
 
 ## Arch Linux
 [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/)
@@ -40,6 +43,18 @@ Set a random image with the `earth` keyword (GNOME): `nasa-wallpaper -w earth -T
 Read the manual: `man nasa-wallpaper` or `nasa-wallpaper -h`
 
 **You can read the all reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference) section**
+
+# Uninstall
+## Debian and derivatives
+
+1. `git clone https://github.com/davidpob99/nasa-wallpaper`
+2. `cd nasa-wallpaper`
+3. `chmod -x UNINSTALL`
+4. `sudo sh UNINSTALL`
+
+## Arch Linux
+
+`sudo pacman -Rs nasa-wallpaper`
 
 # License
 

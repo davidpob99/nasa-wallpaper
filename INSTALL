@@ -1,0 +1,10 @@
+#!/bin/bash
+
+git clone https://github.com/davidpob99/nasa-wallpaper.git
+cd nasa-wallpaper
+install -Dm755 nasa-wallpaper /usr/bin/nasa-wallpaper
+gzip nasa-wallpaper.1
+install -Dm755 nasa-wallpaper.1.gz /usr/share/man/man1/nasa-wallpaper.1.gz
+install -Dm755 LICENSE /usr/share/licenses/nasa-wallpaper/LICENSE
+cd ..
+rm -r nasa-wallpaper

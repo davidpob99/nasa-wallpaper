@@ -1,0 +1,6 @@
+#!/bin/bash
+
+rm /usr/bin/nasa-wallpaper
+rm /usr/share/man/man1/nasa-wallpaper.1.gz
+rm -r /usr/share/licenses/nasa-wallpaper/
+
