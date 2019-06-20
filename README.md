@@ -1,61 +1,37 @@
 # nasa-wallpaper
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=GRXHT9CGJ4L7G)
-[![Website](https://img.shields.io/website-up-down-green-red/http/shields.io.svg?label=my-website)](https://davidpob99.github.io/PolenCyL/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.me/davidpoblacion)
 
+Change your desktop background with a NASA image. You can set an image from the [APOD (Astronomical Picture of the Day)](https://apod.nasa.gov/apod/), the [NASA Image Library](https://images.nasa.gov/) or the [NASA's account in Unsplash](https://unsplash.com/@nasa).
 
-Change your desktop background with a NASA image. You can set an image from both the APOD (Astronomical Picture of the Day) and the 
-NASA Image Library.
+![example](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
 
-![iss040e008244](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
+The supported desktops are:
+* Windows
+* macOS
+* GNOME
+* KDE
+* Cinnamon
+* Unity
+* Budgie
+* XFCE
+* LXDE
+* MATE
+* Deepin
+* i3
 
-# Installation
-## Debian and derivatives
+## Installation
+Just download the executable that fits your OS and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) section, open a terminal and run it. If you are a Arch Linux user, you can download and install it from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
 
-1. `sudo apt-get install jq curl git wget`
-2. `git clone https://github.com/davidpob99/nasa-wallpaper`
-3. `cd nasa-wallpaper`
-4. `chmod -x INSTALL`
-5. `sudo sh INSTALL`
+## Compilation
+You need to have [Rust](https://www.rust-lang.org/) installed, version 2018 or above. As soon as you have it, run `cargo build`.
 
-## Arch Linux
-[AUR](https://aur.archlinux.org/packages/nasa-wallpaper/)
+## Getting started
+Set the APOD image as wallpaper: `nasa-wallpaper -a`
+Set the APOD image of the 27th March 1999: `nasa-wallpaper -a`
+Set a random image from the NASA Image Library: `nasa-wallpaper -n`
+Set a random image with the _earth_ keyword: `nasa-wallpaper -q earth -n`
+Read the help: `nasa-wallpaper --help` or `nasa-wallpaper -h`
 
-## With the code
-`git clone https://github.com/davidpob99/nasa-wallpaper`
-
-`cd nasa-wallpaper`
-
-`chmod -x ./nasa-wallpaper`
-
-`./nasa-wallpaper`
-
-# Getting started
-Set the APOD image as wallpaper (GNOME): `nasa-wallpaper -T gnome -a`
-
-Set the APOD image of the 27th March 1999 (MATE): `nasa-wallpaper -d 1999-03-27 -T mate -a`
-
-Set a random image from the NASA Image Library (LXDE): `nasa-wallpaper -T lxde -n`
-
-Set a random image with the `earth` keyword (GNOME): `nasa-wallpaper -w earth -T gnome -n`
-
-Read the manual: `man nasa-wallpaper` or `nasa-wallpaper -h`
-
-**You can read the all reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference) section**
-
-# Uninstall
-## Debian and derivatives
-
-1. `git clone https://github.com/davidpob99/nasa-wallpaper`
-2. `cd nasa-wallpaper`
-3. `chmod -x UNINSTALL`
-4. `sudo sh UNINSTALL`
-
-## Arch Linux
-
-`sudo pacman -Rs nasa-wallpaper`
-
-# License
-
-Code available under the Apache 2.0 License.
+**You can read the complete reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference)**

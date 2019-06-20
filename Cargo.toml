@@ -1,0 +1,17 @@
+[package]
+name = "nasa-wallpaper"
+version = "2.0.0"
+authors = ["David Población <davidpblcrd@protonmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+clap = "2.33.0"
+reqwest = "0.9.18"
+serde = "1.0.92"
+serde_derive = "1.0.92"
+wallpaper = "2.0.1"
+colored = "1.8.0"
+chrono = "0.4.6"
+json = "0.11.14"
+rand = "0.6.5"
