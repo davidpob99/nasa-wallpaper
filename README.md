@@ -29,9 +29,13 @@ You need to have [Rust](https://www.rust-lang.org/) installed, version 2018 or a
 
 ## Getting started
 Set the APOD image as wallpaper: `nasa-wallpaper -a`
+
 Set the APOD image of the 27th March 1999: `nasa-wallpaper -a`
+
 Set a random image from the NASA Image Library: `nasa-wallpaper -n`
+
 Set a random image with the _earth_ keyword: `nasa-wallpaper -q earth -n`
+
 Read the help: `nasa-wallpaper --help` or `nasa-wallpaper -h`
 
 **You can read the complete reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference)**
