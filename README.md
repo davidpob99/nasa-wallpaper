@@ -30,7 +30,7 @@ You need to have [Rust](https://www.rust-lang.org/) installed, version 2018 or a
 ## Getting started
 Set the APOD image as wallpaper: `nasa-wallpaper -a`
 
-Set the APOD image of the 27th March 1999: `nasa-wallpaper -a`
+Set the APOD image of the 27th March 1999: `nasa-wallpaper -a 1999-3-27`
 
 Set a random image from the NASA Image Library: `nasa-wallpaper -n`
 
