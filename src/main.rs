@@ -29,6 +29,7 @@ use clap::{App, Arg};
 use colored::*;
 use rand::Rng;
 use std::fmt;
+use std::process;
 
 const LICENSE_TEXT: &str = "
    Copyright 2019 David Población
@@ -171,7 +172,8 @@ fn get_nasa_image(
         .as_usize()
         .expect("Could not convert to usize");
     if *num_hits == 0 {
-        panic!("Couldn't find the file you're looking for. Try another tag.");
+        println!("Couldn't find the file you're looking for. Try another tag.");
+        process::exit(0x0100);
     }
     let pages = {
         if (*num_hits / 100) - 1 <= 100 {
