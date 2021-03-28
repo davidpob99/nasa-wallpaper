@@ -171,7 +171,7 @@ fn get_nasa_image(
         .as_usize()
         .expect("Could not convert to usize");
     if *num_hits == 0 {
-        panic!("No items were found :(")
+        panic!("Couldn't find the file you're looking for. Try another tag.");
     }
     let pages = {
         if (*num_hits / 100) - 1 <= 100 {
@@ -189,7 +189,7 @@ fn get_nasa_image(
             .text()
             .unwrap(),
     )
-    .unwrap();
+    .unwrap(); 
     // Get a random index from the page selected
     let index = {
         if *num_hits < 7 {
