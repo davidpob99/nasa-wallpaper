@@ -1,5 +1,8 @@
 # nasa-wallpaper
 
+## THIS PROJECT BREAKS NASA TOS, [THIS](https://git.tar.black/michal/apod) PROJECT DOES NOT
+### It is recommended to use the `apod` project instead, as it does not break TOS due to requiring the user to make their own API key. 
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.me/davidpoblacion)
 
