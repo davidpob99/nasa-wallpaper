@@ -53,6 +53,9 @@ const MSG_CHANGING: &str = "Changing wallpaper...";
 
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
 
+use std::error::Error;
+type WallpaperResult<T> = std::result::Result<T, Box<dyn Error>>;
+
 #[derive(Deserialize)]
 struct Apod {
     #[serde(default)]
@@ -224,12 +227,13 @@ fn get_nasa_image(
 /// * hd: if true high definition is used
 /// # Return
 /// None
-fn set_wallpaper(apod: &Apod, hd: bool) {
+fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     if hd {
-        wallpaper::set_from_url(&apod.hdurl).unwrap();
+        wallpaper::set_from_url(&apod.hdurl)?;
     } else {
-        wallpaper::set_from_url(&apod.url).unwrap();
+        wallpaper::set_from_url(&apod.url)?;
     }
+    Ok(())
 }
 
 /// Prints the program license in terminal
@@ -354,8 +358,12 @@ fn main() {
                         return;
                     }
                     println!("{}", MSG_CHANGING.yellow());
-                    set_wallpaper(&apod, hd);
-                    println!("{}", MSG_DONE.green());
+                    if let Err(err) = set_wallpaper(&apod, hd) {
+                        println!("{}", format!("Error: {}", err).red());
+                    }
+                    else {
+                        println!("{}", MSG_DONE.green());
+                    }
                 }
                 Err(_) => return,
             }
