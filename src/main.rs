@@ -46,7 +46,7 @@ const LICENSE_TEXT: &str = "
    See the License for the specific language governing permissions and
    limitations under the License.";
 
-const API_KEY: &str = "Z1an39TefCytrrClcLSxNGJDGwv09QLHD6zo74R8";
+const API_KEY: &str = "DEMO_KEY";
 
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
