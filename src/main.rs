@@ -53,6 +53,9 @@ const MSG_CHANGING: &str = "Changing wallpaper...";
 
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
 
+use std::error::Error;
+type WallpaperResult<T> = std::result::Result<T, Box<dyn Error>>;
+
 #[derive(Deserialize)]
 struct Apod {
     #[serde(default)]
@@ -117,12 +120,12 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
         date = date
     );
     match reqwest::blocking::get(&request_url)?.json() {
-        Ok(json) => return Ok(json),
+        Ok(json) => Ok(json),
         Err(err) => {
             let text_error = reqwest::blocking::get(&request_url)?.text()?;
             let json_error = json::from(text_error);
             println!("{}", json_error);
-            return Err(err);
+            Err(err)
         }
     }
 }
@@ -140,6 +143,7 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
 ///
 /// # Return
 /// A NasaImage struct
+#[allow(clippy::too_many_arguments)]
 fn get_nasa_image(
     q: &str,
     center: &str,
@@ -213,7 +217,7 @@ fn get_nasa_image(
         title: data["title"].as_str().unwrap().to_owned(),
         center: data["center"].as_str().unwrap().to_owned(),
         description: data["description"].as_str().unwrap().to_owned(),
-        date: date,
+        date, 
         url: response_collection[0].as_str().unwrap().to_owned(),
     }
 }
@@ -224,12 +228,13 @@ fn get_nasa_image(
 /// * hd: if true high definition is used
 /// # Return
 /// None
-fn set_wallpaper(apod: &Apod, hd: bool) {
+fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     if hd {
-        wallpaper::set_from_url(&apod.hdurl).unwrap();
+        wallpaper::set_from_url(&apod.hdurl)?;
     } else {
-        wallpaper::set_from_url(&apod.url).unwrap();
+        wallpaper::set_from_url(&apod.url)?;
     }
+    Ok(())
 }
 
 /// Prints the program license in terminal
@@ -345,19 +350,20 @@ fn main() {
             let api_key = sub_matches.get_one::<String>("key").map(|s| s.as_str()).unwrap_or(API_KEY);
             let hd = sub_matches.get_flag("low");
 
-            match get_apod(&date, &api_key) {
-                Ok(apod) => {
-                    println!("{}", apod);
-                    if apod.media_type != "image" {
-                        print!("{}", "The date you have chosen for the APOD has no image. If you want, you can see the content in: ".yellow());
-                        println!("{}", apod.url.yellow());
-                        return;
-                    }
-                    println!("{}", MSG_CHANGING.yellow());
-                    set_wallpaper(&apod, hd);
+            if let Ok(apod) = get_apod(date, api_key) {
+                println!("{}", apod);
+                if apod.media_type != "image" {
+                    print!("{}", "The date you have chosen for the APOD has no image. If you want, you can see the content in: ".yellow());
+                    println!("{}", apod.url.yellow());
+                    return;
+                }
+                println!("{}", MSG_CHANGING.yellow());
+                if let Err(err) = set_wallpaper(&apod, hd) {
+                    println!("{}", format!("Error: {}", err).red());
+                }
+                else {
                     println!("{}", MSG_DONE.green());
                 }
-                Err(_) => return,
             }
         }
         Some(("unsplash", _)) => {
@@ -384,7 +390,7 @@ fn main() {
                 photographer,
                 title,
                 year_start,
-                &year_end,
+                year_end,
             );
             println!("{}", MSG_CHANGING.yellow());
             wallpaper::set_from_url(&nasa_image.url).unwrap();
