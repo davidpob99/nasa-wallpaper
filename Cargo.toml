@@ -15,5 +15,6 @@ serde_derive = "1.0.196"
 wallpaper = { version = "3", features = ["from_url"] }
 colored = "2"
 chrono = "0.4.33"
+chrono-tz = "0.8.5"
 json = "0.12.4"
 rand = "0.8.5"

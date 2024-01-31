@@ -15,6 +15,7 @@
 */
 
 extern crate chrono;
+extern crate chrono_tz;
 extern crate clap;
 extern crate colored;
 extern crate json;
@@ -25,6 +26,8 @@ extern crate reqwest;
 extern crate serde_derive;
 
 use chrono::prelude::*;
+use chrono_tz::US::Eastern;
+use chrono_tz::Tz;
 use clap::{Arg, Command};
 use colored::*;
 use rand::Rng;
@@ -242,6 +245,17 @@ fn print_license() {
     println!("{}", LICENSE_TEXT);
 }
 
+/// Get today's date in Eastern Standard Time (when the APOD is published).
+/// # Parameters
+/// None
+/// # Return
+/// A tuple with 3 elements that contains the EST today year, month and day (in this order)
+fn get_today_est() -> (i32, u32, u32) {
+    let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
+
+    return (est_now.year(), est_now.month(), est_now.day())
+}
+
 fn cli() -> Command {
     Command::new("nasa-wallpaper")
     .version(VERSION)
@@ -345,7 +359,8 @@ fn main() {
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {
-            let today = Local::now().year().to_string()+ "-" + &Local::now().month().to_string() + "-" + &Local::now().day().to_string();
+            let (est_year, est_month, est_day)= get_today_est();
+            let today = est_year.to_string() + "-" + &est_month.to_string() + "-" + &est_day.to_string();
             let date = sub_matches.get_one::<String>("date").map(|s| s.as_str()).unwrap_or(&today);
             let api_key = sub_matches.get_one::<String>("key").map(|s| s.as_str()).unwrap_or(API_KEY);
             let hd = sub_matches.get_flag("low");
@@ -379,8 +394,9 @@ fn main() {
             let photographer = sub_matches.get_one::<String>("photographer").map(|s| s.as_str()).unwrap_or("");
             let title = sub_matches.get_one::<String>("title").map(|s| s.as_str()).unwrap_or("");
             let year_start = sub_matches.get_one::<String>("year_start").map(|s| s.as_str()).unwrap_or("1900");
-            let tmp_year = Local::now().year().to_string();
-            let year_end = sub_matches.get_one::<String>("year_end").map(|s| s.as_str()).unwrap_or(&tmp_year);
+            let (est_year, _, _)= get_today_est();
+            let est_year_str = est_year.to_string();
+            let year_end = sub_matches.get_one::<String>("year_end").map(|s| s.as_str()).unwrap_or(&est_year_str);
 
             let nasa_image = get_nasa_image(
                 q,
@@ -392,9 +408,9 @@ fn main() {
                 year_start,
                 year_end,
             );
+            println!("{}", nasa_image);
             println!("{}", MSG_CHANGING.yellow());
             wallpaper::set_from_url(&nasa_image.url).unwrap();
-            println!("{}", nasa_image);
             println!("{}", MSG_DONE.green());
         }
         Some(("license", _)) => {
