@@ -1,17 +1,19 @@
 [package]
 name = "nasa-wallpaper"
+description = "Change your desktop background with a NASA image"
 version = "2.0.0"
-authors = ["David Población <davidpblcrd@protonmail.com>"]
-edition = "2018"
+authors = ["David Población Criado <davidpblcrd@protonmail.com>"]
+edition = "2021"
 license = "Apache-2.0"
+repository = "https://github.com/davidpob99/nasa-wallpaper"
 
 [dependencies]
-clap = "2.33.0"
-reqwest = "0.9.18"
-serde = "1.0.92"
-serde_derive = "1.0.92"
-wallpaper = "2.0.1"
-colored = "1.8.0"
-chrono = "0.4.6"
-json = "0.11.14"
-rand = "0.6.5"
+clap = "4.4.18"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+serde = "1.0.196"
+serde_derive = "1.0.196"
+wallpaper = { version = "3", features = ["from_url"] }
+colored = "2"
+chrono = "0.4.33"
+json = "0.12.4"
+rand = "0.8.5"
