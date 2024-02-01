@@ -50,7 +50,7 @@ const LICENSE_TEXT: &str = "
    limitations under the License.";
 
 const API_KEY: &str = "DEMO_KEY";
-const VERSION: &str = "2.0.0+";
+const VERSION: &str = "2.1.0";
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
 
