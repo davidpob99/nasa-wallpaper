@@ -39,4 +39,4 @@ Set a random image with the _earth_ keyword: `nasa-wallpaper -n -q earth`
 
 Read the help: `nasa-wallpaper --help` or `nasa-wallpaper -h`
 
-**You can read the complete reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Reference)**
+**You can read the complete reference on the [Wiki](https://github.com/davidpob99/nasa-wallpaper/wiki/Command%E2%80%90Line-Help)**
