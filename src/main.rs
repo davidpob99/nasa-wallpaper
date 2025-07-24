@@ -307,7 +307,7 @@ fn cli() -> Command {
         ))
     .subcommand(
         Command::new("random_apod")
-        .short_flag('ra')
+        .short_flag('r')
         .long_flag("random_apod")
         .about("Get a APOD (Astronomical Picture of the Day)")
         .arg(
