@@ -141,7 +141,7 @@ fn get_random_apod(api_key: &str) -> Result<Apod, reqwest::Error> {
         "https://api.nasa.gov/planetary/apod?api_key={api_key}&count=1",
         api_key = api_key
     );
-    match reqwest::blocking::get(&request_url)?.json()::<Vec<Apod>> {
+    match reqwest::blocking::get(&request_url)?.json::<Vec<Apod>>() {
         Ok(mut list) => Ok(list.remove(0)),
         Err(err) => {
             let text_error = reqwest::blocking::get(&request_url)?.text()?;
