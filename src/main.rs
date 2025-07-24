@@ -50,11 +50,9 @@ const LICENSE_TEXT: &str = "
    limitations under the License.";
 
 const API_KEY: &str = "DEMO_KEY";
-const VERSION: &str = "2.1.0";
+const VERSION: &str = "2.2.0";
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
-
-const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
 
 use std::error::Error;
 type WallpaperResult<T> = std::result::Result<T, Box<dyn Error>>;
@@ -132,7 +130,27 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
         }
     }
 }
-
+/// Gets random APOD image from the NASA
+/// # Parameters
+/// * api_key
+/// # Return
+/// Returns an APOD element if no errors ocurred.
+/// Otherwise, it returns an error
+fn get_random_apod(api_key: &str) -> Result<Apod, reqwest::Error> {
+    let request_url = format!(
+        "https://api.nasa.gov/planetary/apod?api_key={api_key}&count=1",
+        api_key = api_key
+    );
+    match reqwest::blocking::get(&request_url)?.json::<Vec<Apod>>() {
+        Ok(mut list) => Ok(list.remove(0)),
+        Err(err) => {
+            let text_error = reqwest::blocking::get(&request_url)?.text()?;
+            let json_error = json::from(text_error);
+            println!("{}", json_error);
+            Err(err)
+        }
+    }
+}
 /// Gets an image from the repository of the NASA
 /// # Parameters
 /// * q
@@ -288,6 +306,24 @@ fn cli() -> Command {
                 
         ))
     .subcommand(
+        Command::new("random_apod")
+        .short_flag('r')
+        .long_flag("random_apod")
+        .about("Get a APOD (Astronomical Picture of the Day)")
+        .arg(
+            Arg::new("key")
+                .short('k')
+                .long("key")
+                .value_name("API_KEY")
+                .help("Change the demo API key. You can get one in https://api.nasa.gov/"))
+        .arg(
+            Arg::new("low")
+                .short('l')
+                .long("low")
+                .help("Use the low definition image. It is faster than the HD photo")
+                .action(clap::ArgAction::SetTrue)
+        ))
+    .subcommand(
         Command::new("nasa_image")
         .short_flag('n')
         .long_flag("nasa_image")
@@ -346,11 +382,6 @@ fn cli() -> Command {
                 .value_name("YEAR_END")
                 .action(clap::ArgAction::Set)
                 .help("The end year for results. Format: YYYY")))
-    .subcommand(
-        Command::new("unsplash")
-        .short_flag('u')
-        .long_flag("unsplash")
-        .about("Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)"))
     .subcommand(Command::new("license").long_flag("license"))
 }
 
@@ -381,10 +412,25 @@ fn main() {
                 }
             }
         }
-        Some(("unsplash", _)) => {
-            println!("{}", MSG_CHANGING.yellow());
-            wallpaper::set_from_url(URL_UNSPLASH).unwrap();
-            println!("{}", MSG_DONE.green());
+        Some(("random_apod", sub_matches)) => {
+            let api_key = sub_matches.get_one::<String>("key").map(|s| s.as_str()).unwrap_or(API_KEY);
+            let hd = sub_matches.get_flag("low");
+
+            if let Ok(apod) = get_random_apod(api_key) {
+                println!("{}", apod);
+                if apod.media_type != "image" {
+                    print!("{}", "The have been an error with the random apod image. If you want, you can see the content in: ".yellow());
+                    println!("{}", apod.url.yellow());
+                    return;
+                }
+                println!("{}", MSG_CHANGING.yellow());
+                if let Err(err) = set_wallpaper(&apod, hd) {
+                    println!("{}", format!("Error: {}", err).red());
+                }
+                else {
+                    println!("{}", MSG_DONE.green());
+                }
+            }
         }
         Some(("nasa_image", sub_matches)) => {
             let q = sub_matches.get_one::<String>("query").map(|s| s.as_str()).unwrap_or("");
