@@ -142,7 +142,7 @@ fn get_random_apod(api_key: &str) -> Result<Apod, reqwest::Error> {
         api_key = api_key
     );
     match reqwest::blocking::get(&request_url)?.json() {
-        Ok(json) => Ok(json),
+        Ok(json) => Ok(json.remove(0)),
         Err(err) => {
             let text_error = reqwest::blocking::get(&request_url)?.text()?;
             let json_error = json::from(text_error);
