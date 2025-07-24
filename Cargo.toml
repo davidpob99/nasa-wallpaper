@@ -12,7 +12,7 @@ clap = "4.5.4"
 reqwest = { version = "0.12.4", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = "1.0.203"
 serde_derive = "1.0.203"
-wallpaper = { git = "https://github.com/herruzo99/wallpaper.rs", rev = "9b325998086221e5c8be8afb3169d6e0fc131667", features = ["from_url"] }
+wallpaper = { git = "https://github.com/herruzo99/wallpaper.rs", rev = "525baba072e0cad5ccc2f992c058df21ecb1c62a", features = ["from_url"] }
 colored = "2.1.0"
 chrono = "0.4.38"
 chrono-tz = "0.9.0"
