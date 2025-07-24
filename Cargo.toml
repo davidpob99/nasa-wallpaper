@@ -1,7 +1,7 @@
 [package]
 name = "nasa-wallpaper"
 description = "Change your desktop background with a NASA image"
-version = "2.1.1"
+version = "2.2.0"
 authors = ["David Población Criado <davidpblcrd@protonmail.com>"]
 edition = "2021"
 license = "Apache-2.0"
