@@ -26,8 +26,8 @@ extern crate reqwest;
 extern crate serde_derive;
 
 use chrono::prelude::*;
-use chrono_tz::US::Eastern;
 use chrono_tz::Tz;
+use chrono_tz::US::Eastern;
 use clap::{Arg, Command};
 use colored::*;
 use rand::Rng;
@@ -211,8 +211,13 @@ fn get_nasa_image(
     let item = &items[index];
     let data = &item["data"][0];
     let url_collection = item["href"].as_str().unwrap();
-    let response_collection =
-        json::parse(&reqwest::blocking::get(url_collection).unwrap().text().unwrap()).unwrap();
+    let response_collection = json::parse(
+        &reqwest::blocking::get(url_collection)
+            .unwrap()
+            .text()
+            .unwrap(),
+    )
+    .unwrap();
     let mut date = data["date_created"].as_str().unwrap().to_owned();
     date.truncate(10);
     NasaImage {
@@ -220,7 +225,7 @@ fn get_nasa_image(
         title: data["title"].as_str().unwrap().to_owned(),
         center: data["center"].as_str().unwrap().to_owned(),
         description: data["description"].as_str().unwrap().to_owned(),
-        date, 
+        date,
         url: response_collection[0].as_str().unwrap().to_owned(),
     }
 }
@@ -253,7 +258,7 @@ fn print_license() {
 fn get_today_est() -> (i32, u32, u32) {
     let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
 
-    return (est_now.year(), est_now.month(), est_now.day())
+    return (est_now.year(), est_now.month(), est_now.day());
 }
 
 fn cli() -> Command {
@@ -359,10 +364,17 @@ fn main() {
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {
-            let (est_year, est_month, est_day)= get_today_est();
-            let today = est_year.to_string() + "-" + &est_month.to_string() + "-" + &est_day.to_string();
-            let date = sub_matches.get_one::<String>("date").map(|s| s.as_str()).unwrap_or(&today);
-            let api_key = sub_matches.get_one::<String>("key").map(|s| s.as_str()).unwrap_or(API_KEY);
+            let (est_year, est_month, est_day) = get_today_est();
+            let today =
+                est_year.to_string() + "-" + &est_month.to_string() + "-" + &est_day.to_string();
+            let date = sub_matches
+                .get_one::<String>("date")
+                .map(|s| s.as_str())
+                .unwrap_or(&today);
+            let api_key = sub_matches
+                .get_one::<String>("key")
+                .map(|s| s.as_str())
+                .unwrap_or(API_KEY);
             let hd = sub_matches.get_flag("low");
 
             if let Ok(apod) = get_apod(date, api_key) {
@@ -375,8 +387,7 @@ fn main() {
                 println!("{}", MSG_CHANGING.yellow());
                 if let Err(err) = set_wallpaper(&apod, hd) {
                     println!("{}", format!("Error: {}", err).red());
-                }
-                else {
+                } else {
                     println!("{}", MSG_DONE.green());
                 }
             }
@@ -387,16 +398,40 @@ fn main() {
             println!("{}", MSG_DONE.green());
         }
         Some(("nasa_image", sub_matches)) => {
-            let q = sub_matches.get_one::<String>("query").map(|s| s.as_str()).unwrap_or("");
-            let center = sub_matches.get_one::<String>("center").map(|s| s.as_str()).unwrap_or("");
-            let location = sub_matches.get_one::<String>("location").map(|s| s.as_str()).unwrap_or("");
-            let nasa_id = sub_matches.get_one::<String>("nasa_id").map(|s| s.as_str()).unwrap_or("");
-            let photographer = sub_matches.get_one::<String>("photographer").map(|s| s.as_str()).unwrap_or("");
-            let title = sub_matches.get_one::<String>("title").map(|s| s.as_str()).unwrap_or("");
-            let year_start = sub_matches.get_one::<String>("year_start").map(|s| s.as_str()).unwrap_or("1900");
-            let (est_year, _, _)= get_today_est();
+            let q = sub_matches
+                .get_one::<String>("query")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let center = sub_matches
+                .get_one::<String>("center")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let location = sub_matches
+                .get_one::<String>("location")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let nasa_id = sub_matches
+                .get_one::<String>("nasa_id")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let photographer = sub_matches
+                .get_one::<String>("photographer")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let title = sub_matches
+                .get_one::<String>("title")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let year_start = sub_matches
+                .get_one::<String>("year_start")
+                .map(|s| s.as_str())
+                .unwrap_or("1900");
+            let (est_year, _, _) = get_today_est();
             let est_year_str = est_year.to_string();
-            let year_end = sub_matches.get_one::<String>("year_end").map(|s| s.as_str()).unwrap_or(&est_year_str);
+            let year_end = sub_matches
+                .get_one::<String>("year_end")
+                .map(|s| s.as_str())
+                .unwrap_or(&est_year_str);
 
             let nasa_image = get_nasa_image(
                 q,
