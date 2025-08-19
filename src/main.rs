@@ -30,7 +30,7 @@ use chrono_tz::Tz;
 use chrono_tz::US::Eastern;
 use clap::{Arg, Command};
 use colored::*;
-use rand::Rng;
+use rand::prelude::*; // aggiornato
 use std::fmt;
 use std::process;
 
@@ -41,7 +41,7 @@ const LICENSE_TEXT: &str = "
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+       https://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an 'AS IS' BASIS,
@@ -57,7 +57,7 @@ const MSG_CHANGING: &str = "Changing wallpaper...";
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
 
 use std::error::Error;
-type WallpaperResult<T> = std::result::Result<T, Box<dyn Error>>;
+type WallpaperResult<T> = Result<T, Box<dyn Error>>;
 
 #[derive(Deserialize)]
 struct Apod {
@@ -109,13 +109,6 @@ impl fmt::Display for NasaImage {
     }
 }
 
-/// Gets the APOD image from the NASA
-/// # Parameters
-/// * date
-/// * api_key
-/// # Return
-/// Returns an APOD element if no errors ocurred.
-/// Otherwise, it returns an error
 fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     let request_url = format!(
         "https://api.nasa.gov/planetary/apod?api_key={api_key}&date={date}",
@@ -133,19 +126,6 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     }
 }
 
-/// Gets an image from the repository of the NASA
-/// # Parameters
-/// * q
-/// * center
-/// * location
-/// * nasa_id
-/// * photographer
-/// * title
-/// * year_start
-/// * year_end
-///
-/// # Return
-/// A NasaImage struct
 #[allow(clippy::too_many_arguments)]
 fn get_nasa_image(
     q: &str,
@@ -174,7 +154,7 @@ fn get_nasa_image(
             .text()
             .unwrap(),
     )
-    .unwrap();
+        .unwrap();
     let num_hits: &usize = &response["collection"]["metadata"]["total_hits"]
         .as_usize()
         .expect("Could not convert to usize");
@@ -189,8 +169,8 @@ fn get_nasa_image(
             100
         }
     };
-    // Get a random page
-    let index_page = rand::thread_rng().gen_range(0..pages);
+    // FIX: nuovo API rand
+    let index_page = rand::rng().random_range(0..pages);
     request_url.push_str(&format!("&page={page}", page = index_page));
     response = json::parse(
         &reqwest::blocking::get(&request_url)
@@ -198,13 +178,13 @@ fn get_nasa_image(
             .text()
             .unwrap(),
     )
-    .unwrap();
-    // Get a random index from the page selected
+        .unwrap();
+    // FIX: nuovo API rand
     let index = {
         if *num_hits < 7 {
             *num_hits - 1
         } else {
-            rand::thread_rng().gen_range(0..100)
+            rand::rng().random_range(0..100)
         }
     };
     let items = &response["collection"]["items"];
@@ -217,7 +197,7 @@ fn get_nasa_image(
             .text()
             .unwrap(),
     )
-    .unwrap();
+        .unwrap();
     let mut date = data["date_created"].as_str().unwrap().to_owned();
     date.truncate(10);
     NasaImage {
@@ -230,12 +210,6 @@ fn get_nasa_image(
     }
 }
 
-/// Sets an APOD element as desktop wallpaper
-/// # Parameters
-/// * apod
-/// * hd: if true high definition is used
-/// # Return
-/// None
 fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     if hd {
         wallpaper::set_from_url(&apod.hdurl)?;
@@ -245,118 +219,110 @@ fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     Ok(())
 }
 
-/// Prints the program license in terminal
 fn print_license() {
     println!("{}", LICENSE_TEXT);
 }
 
-/// Get today's date in Eastern Standard Time (when the APOD is published).
-/// # Parameters
-/// None
-/// # Return
-/// A tuple with 3 elements that contains the EST today year, month and day (in this order)
 fn get_today_est() -> (i32, u32, u32) {
     let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
-
-    return (est_now.year(), est_now.month(), est_now.day());
+    (est_now.year(), est_now.month(), est_now.day())
 }
 
 fn cli() -> Command {
     Command::new("nasa-wallpaper")
-    .version(VERSION)
-    .author("David Población Criado")
-    .about("nasa-wallpaper is a shell program which allows users to change the desktop wallpaper with NASA photographs. If there are more than one photo with the given options, it will choose a random one.")
-    .arg_required_else_help(true)
-    .subcommand(
-        Command::new("apod")
-        .short_flag('a')
-        .long_flag("apod")
-        .about("Get the APOD (Astronomical Picture of the Day)")
-        .arg(
-            Arg::new("date")
-                .short('d')
-                .long("date")
-                .value_name("DATE")
-                .help("Download the APOD from other date than today"))
-        .arg(
-            Arg::new("key")
-                .short('k')
-                .long("key")
-                .value_name("API_KEY")
-                .help("Change the demo API key. You can get one in https://api.nasa.gov/"))
-        .arg(
-            Arg::new("low")
-                .short('l')
-                .long("low")
-                .help("Use the low definition image. It is faster than the HD photo")
-                .action(clap::ArgAction::SetTrue)
-                
-        ))
-    .subcommand(
-        Command::new("nasa_image")
-        .short_flag('n')
-        .long_flag("nasa_image")
-        .about("Get a random image from the NASA Image library (http://images.nasa.gov) with the parameters provided")
-        .arg(
-            Arg::new("query")
-                .short('q')
-                .long("query")
-                .value_name("Q")
-                .action(clap::ArgAction::Set)
-                .help("Free text search terms to compare to all indexed metadata"))
-        .arg(
-            Arg::new("center")
-                .short('c')
-                .long("center")
-                .value_name("CENTER")
-                .action(clap::ArgAction::Set)
-                .help("NASA center which published the media"))
-        .arg(
-            Arg::new("location")
-                .short('o')
-                .long("location")
-                .value_name("LOCATION")
-                .action(clap::ArgAction::Set)
-                .help("Terms to search for in “Location” fields"))
-        .arg(
-            Arg::new("nasa_id")
-                .short('i')
-                .long("nasa_id")
-                .value_name("NASA_ID")
-                .action(clap::ArgAction::Set)
-                .help("The media asset’s NASA ID"))
-        .arg(
-            Arg::new("photographer")
-                .short('p')
-                .long("phtographer")
-                .value_name("PHOTOGRAPHER")
-                .action(clap::ArgAction::Set)
-                .help("The primary photographer’s name"))
-        .arg(
-            Arg::new("title")
-                .short('t')
-                .long("title")
-                .value_name("TITLE")
-                .action(clap::ArgAction::Set)
-                .help("Terms to search for in “Title” fields"))
-        .arg(
-            Arg::new("year_start")
-                .long("year_start")
-                .value_name("YEAR_START")
-                .action(clap::ArgAction::Set)
-                .help("The start year for results. Format: YYYY"))
-        .arg(
-            Arg::new("year_end")
-                .long("year_end")
-                .value_name("YEAR_END")
-                .action(clap::ArgAction::Set)
-                .help("The end year for results. Format: YYYY")))
-    .subcommand(
-        Command::new("unsplash")
-        .short_flag('u')
-        .long_flag("unsplash")
-        .about("Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)"))
-    .subcommand(Command::new("license").long_flag("license"))
+        .version(VERSION)
+        .author("David Población Criado")
+        .about("nasa-wallpaper is a shell program which allows users to change the desktop wallpaper with NASA photographs. If there are more than one photo with the given options, it will choose a random one.")
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("apod")
+                .short_flag('a')
+                .long_flag("apod")
+                .about("Get the APOD (Astronomical Picture of the Day)")
+                .arg(
+                    Arg::new("date")
+                        .short('d')
+                        .long("date")
+                        .value_name("DATE")
+                        .help("Download the APOD from other date than today"))
+                .arg(
+                    Arg::new("key")
+                        .short('k')
+                        .long("key")
+                        .value_name("API_KEY")
+                        .help("Change the demo API key. You can get one in https://api.nasa.gov/"))
+                .arg(
+                    Arg::new("low")
+                        .short('l')
+                        .long("low")
+                        .help("Use the low definition image. It is faster than the HD photo")
+                        .action(clap::ArgAction::SetTrue)
+                ))
+        .subcommand(
+            Command::new("nasa_image")
+                .short_flag('n')
+                .long_flag("nasa_image")
+                .about("Get a random image from the NASA Image library (https://images.nasa.gov) with the parameters provided")
+                .arg(
+                    Arg::new("query")
+                        .short('q')
+                        .long("query")
+                        .value_name("Q")
+                        .action(clap::ArgAction::Set)
+                        .help("Free text search terms to compare to all indexed metadata"))
+                .arg(
+                    Arg::new("center")
+                        .short('c')
+                        .long("center")
+                        .value_name("CENTER")
+                        .action(clap::ArgAction::Set)
+                        .help("NASA center which published the media"))
+                .arg(
+                    Arg::new("location")
+                        .short('o')
+                        .long("location")
+                        .value_name("LOCATION")
+                        .action(clap::ArgAction::Set)
+                        .help("Terms to search for in “Location” fields"))
+                .arg(
+                    Arg::new("nasa_id")
+                        .short('i')
+                        .long("nasa_id")
+                        .value_name("NASA_ID")
+                        .action(clap::ArgAction::Set)
+                        .help("The media asset’s NASA ID"))
+                .arg(
+                    Arg::new("photographer")
+                        .short('p')
+                        .long("phtographer")
+                        .value_name("PHOTOGRAPHER")
+                        .action(clap::ArgAction::Set)
+                        .help("The primary photographer’s name"))
+                .arg(
+                    Arg::new("title")
+                        .short('t')
+                        .long("title")
+                        .value_name("TITLE")
+                        .action(clap::ArgAction::Set)
+                        .help("Terms to search for in “Title” fields"))
+                .arg(
+                    Arg::new("year_start")
+                        .long("year_start")
+                        .value_name("YEAR_START")
+                        .action(clap::ArgAction::Set)
+                        .help("The start year for results. Format: YYYY"))
+                .arg(
+                    Arg::new("year_end")
+                        .long("year_end")
+                        .value_name("YEAR_END")
+                        .action(clap::ArgAction::Set)
+                        .help("The end year for results. Format: YYYY")))
+        .subcommand(
+            Command::new("unsplash")
+                .short_flag('u')
+                .long_flag("unsplash")
+                .about("Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)"))
+        .subcommand(Command::new("license").long_flag("license"))
 }
 
 fn main() {
