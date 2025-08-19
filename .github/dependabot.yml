@@ -1,0 +1,14 @@
+# .github/dependabot.yml
+
+version: 2
+updates:
+  - package-ecosystem: "cargo"        
+    directory: "/"                    
+    schedule:
+      interval: "Day"              
+    open-pull-requests-limit: 10     
+    commit-message:
+      prefix: "deps"                  
+    labels:
+      - "dependencies"
+      - "rust"
