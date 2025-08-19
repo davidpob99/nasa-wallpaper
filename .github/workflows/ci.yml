@@ -127,7 +127,7 @@ jobs:
           shasum -a 256 ${{ matrix.platform.archive }} > ${{ matrix.platform.archive }}.sha256
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.archive }}
           path: ${{ matrix.platform.archive }}
