@@ -4,7 +4,6 @@
 ![GitHub Release](https://img.shields.io/github/v/release/davidpob99/nasa-wallpaper)
 ![GitHub Downloads](https://img.shields.io/github/downloads/davidpob99/nasa-wallpaper/total)
 ![License](https://img.shields.io/github/license/davidpob99/nasa-wallpaper)
-![Build](https://img.shields.io/github/actions/workflow/status/davidpob99/nasa-wallpaper/rust.yml?branch=main)
 
 A lightweight tool to automatically set your desktop wallpaper with stunning NASA images.
 You can choose images from:
