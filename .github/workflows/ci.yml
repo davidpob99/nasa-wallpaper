@@ -3,135 +3,102 @@ on: [push, pull_request]
 env:
   CRATE_NAME: nasa-wallpaper
   GITHUB_TOKEN: ${{ github.token }}
+
 jobs:
   test:
-    name: ${{ matrix.platform.os_name }} with rust ${{ matrix.toolchain }}
+    name: ${{ matrix.platform.os_name }} with Rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
       matrix:
         platform:
-          # Platforms that don't work:
-          #
-          # - sparc64-unknown-linux-gnu - cannot compile openssl-sys
-          # - x86_64-unknown-illumos - weird error compiling openssl - "bin/sh: 1: granlib: not found"
           - os_name: Linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             bin: nasa-wallpaper
-            name: nasa-wallpaper-Linux-x86_64-gnu.tar.gz
+            archive_name: nasa-wallpaper-Linux-x86_64-gnu.tar.gz
             skip_tests: true
-          - os_name: Linux-aarch64
-            os: ubuntu-22.04
-            target: aarch64-unknown-linux-gnu
+          - os_name: macOS-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
             bin: nasa-wallpaper
-            name: nasa-wallpaper-Linux-aarch64-gnu.tar.gz
-            skip_tests: true
-          - os_name: Linux-arm
-            os: ubuntu-22.04
-            target: arm-unknown-linux-gnueabi
-            bin: nasa-wallpaper
-            name: nasa-wallpaper-Linux-arm-gnu.tar.gz
-            skip_tests: true
-          - os_name: Linux-i686
-            os: ubuntu-22.04
-            target: i686-unknown-linux-gnu
-            bin: nasa-wallpaper
-            name: nasa-wallpaper-Linux-i686-gnu.tar.gz
-            skip_tests: true
-          - os_name: Windows-aarch64
-            os: windows-latest
-            target: aarch64-pc-windows-msvc
-            bin: nasa-wallpaper.exe
-            name: nasa-wallpaper-Windows-aarch64.zip
-            skip_tests: true
-          - os_name: Windows-i686
-            os: windows-latest
-            target: i686-pc-windows-msvc
-            bin: nasa-wallpaper.exe
-            name: nasa-wallpaper-Windows-i686.zip
+            archive_name: nasa-wallpaper-Darwin-x86_64.tar.gz
             skip_tests: true
           - os_name: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: nasa-wallpaper.exe
-            name: nasa-wallpaper-Windows-x86_64.zip
-            skip_tests: true
-          - os_name: macOS-x86_64
-            os: macOS-latest
-            target: x86_64-apple-darwin
-            bin: nasa-wallpaper
-            name: nasa-wallpaper-Darwin-x86_64.tar.gz
-            skip_tests: true
-          - os_name: macOS-aarch64
-            os: macOS-latest
-            target: aarch64-apple-darwin
-            bin: nasa-wallpaper
-            name: nasa-wallpaper-Darwin-aarch64.tar.gz
+            archive_name: nasa-wallpaper-Windows-x86_64.zip
             skip_tests: true
         toolchain:
           - stable
-          # - beta
-          # - nightly
+
     steps:
       - uses: actions/checkout@v4
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
+
+      # Cache cargo & target directories with Cargo.lock hash
+      - name: Cache cargo & target
+        uses: actions/cache@v3
         with:
-          key: "v2"
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
       - name: Configure Git
         run: |
-          git config --global user.email "jdoe@example.com"
-          git config --global user.name "J. Doe"
+          git config --global user.email "ci-bot@example.com"
+          git config --global user.name "CI Bot"
+
       - name: Install musl-tools on Linux
+        if: startsWith(matrix.platform.os_name, 'Linux')
         run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
-        if: contains(matrix.platform.name, 'musl')
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
-          command: "build"
+          command: build
           target: ${{ matrix.platform.target }}
           toolchain: ${{ matrix.toolchain }}
-          args: "--locked --release"
+          args: --locked --release
           strip: true
+
       - name: Run tests
+        if: ${{ !matrix.platform.skip_tests }}
         uses: houseabsolute/actions-rust-cross@v0
         with:
-          command: "test"
+          command: test
           target: ${{ matrix.platform.target }}
           toolchain: ${{ matrix.toolchain }}
-          args: "--locked --release"
-        if: ${{ !matrix.platform.skip_tests }}
+          args: --locked --release
+
       - name: Package as archive
         shell: bash
         run: |
           cd target/${{ matrix.platform.target }}/release
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
-            7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+            7z a ../../../${{ matrix.platform.archive_name }} ${{ matrix.platform.bin }}
           else
-            tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
+            tar czvf ../../../${{ matrix.platform.archive_name }} ${{ matrix.platform.bin }}
           fi
           cd -
-        if: |
-          matrix.toolchain == 'stable' &&
-          ( startsWith( github.ref, 'refs/tags/v' ) ||
-            github.ref == 'refs/tags/test-release' )
+
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nasa-wallpaper-${{ matrix.platform.os_name }}
-          path: "nasa-wallpaper-*"
-        if: matrix.toolchain == 'stable' && github.ref == 'refs/tags/test-release'
+          name: ${{ matrix.platform.archive_name }}
+          path: ${{ matrix.platform.archive_name }}
+
       - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.platform.name }}
-        if: |
-          matrix.toolchain == 'stable' &&
-          matrix.platform.os == 'macOS-latest' &&
-          ( startsWith( github.ref, 'refs/tags/v' ) ||
-            github.ref == 'refs/tags/test-release' )
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: shasum -a 256 ${{ matrix.platform.archive_name }}
+
       - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "nasa-wallpaper*"
-        if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/v' )
+          files: ${{ matrix.platform.archive_name }}
