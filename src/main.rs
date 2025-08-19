@@ -159,8 +159,8 @@ fn get_nasa_image(
     }
 
     let pages = if (num_hits / 100) - 1 <= 100 { (num_hits / 100) - 1 } else { 100 };
-    let mut rng = rand::thread_rng();
-    let index_page = rng.gen_range(0..=pages);
+    let mut rng = rand::rng();
+    let index_page = rng.random_range(0..=pages);
     request_url.push_str(&format!("&page={}", index_page));
 
     let response_text = reqwest::blocking::get(&request_url)
@@ -169,7 +169,7 @@ fn get_nasa_image(
         .unwrap();
     response_json = json::parse(&response_text).unwrap();
 
-    let index = if num_hits < 7 { num_hits - 1 } else { rng.gen_range(0..100) };
+    let index = if num_hits < 7 { num_hits - 1 } else { rng.random_range(0..100)};
     let items = &response_json["collection"]["items"];
     let item = &items[index];
     let data = &item["data"][0];
