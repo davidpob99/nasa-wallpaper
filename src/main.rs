@@ -32,9 +32,9 @@ use chrono_tz::US::Eastern;
 use clap::{Arg, Command};
 use colored::*;
 use rand::Rng;
+use std::error::Error;
 use std::fmt;
 use std::process;
-use std::error::Error;
 
 const LICENSE_TEXT: &str = r#"
    Copyright 2019 David Población
@@ -84,6 +84,7 @@ impl fmt::Display for Apod {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct NasaImage {
     nasa_id: String,
@@ -158,7 +159,11 @@ fn get_nasa_image(
         process::exit(0x0100);
     }
 
-    let pages = if (num_hits / 100) - 1 <= 100 { (num_hits / 100) - 1 } else { 100 };
+    let pages = if (num_hits / 100) - 1 <= 100 {
+        (num_hits / 100) - 1
+    } else {
+        100
+    };
     let mut rng = rand::rng();
     let index_page = rng.random_range(0..=pages);
     request_url.push_str(&format!("&page={}", index_page));
@@ -169,7 +174,11 @@ fn get_nasa_image(
         .unwrap();
     response_json = json::parse(&response_text).unwrap();
 
-    let index = if num_hits < 7 { num_hits - 1 } else { rng.random_range(0..100)};
+    let index = if num_hits < 7 {
+        num_hits - 1
+    } else {
+        rng.random_range(0..100)
+    };
     let items = &response_json["collection"]["items"];
     let item = &items[index];
     let data = &item["data"][0];
@@ -181,7 +190,7 @@ fn get_nasa_image(
             .text()
             .unwrap(),
     )
-        .unwrap();
+    .unwrap();
 
     let mut date = data["date_created"].as_str().unwrap().to_owned();
     date.truncate(10);
@@ -225,7 +234,12 @@ fn cli() -> Command {
                 .about("Get the APOD (Astronomical Picture of the Day)")
                 .arg(Arg::new("date").short('d').long("date").value_name("DATE"))
                 .arg(Arg::new("key").short('k').long("key").value_name("API_KEY"))
-                .arg(Arg::new("low").short('l').long("low").action(clap::ArgAction::SetTrue)),
+                .arg(
+                    Arg::new("low")
+                        .short('l')
+                        .long("low")
+                        .action(clap::ArgAction::SetTrue),
+                ),
         )
         .subcommand(Command::new("nasa_image").about("Get a random NASA image"))
         .subcommand(Command::new("unsplash").about("Get a random NASA image from Unsplash"))
@@ -239,14 +253,23 @@ fn main() {
         Some(("apod", sub_matches)) => {
             let (year, month, day) = get_today_est();
             let today = format!("{}-{}-{}", year, month, day);
-            let date = sub_matches.get_one::<String>("date").map(|s| s.as_str()).unwrap_or(&today);
-            let api_key = sub_matches.get_one::<String>("key").map(|s| s.as_str()).unwrap_or(API_KEY);
+            let date = sub_matches
+                .get_one::<String>("date")
+                .map(|s| s.as_str())
+                .unwrap_or(&today);
+            let api_key = sub_matches
+                .get_one::<String>("key")
+                .map(|s| s.as_str())
+                .unwrap_or(API_KEY);
             let hd = sub_matches.get_flag("low");
 
             if let Ok(apod) = get_apod(date, api_key) {
                 println!("{}", apod);
                 if apod.media_type != "image" {
-                    println!("{}", format!("No image available. See: {}", apod.url).yellow());
+                    println!(
+                        "{}",
+                        format!("No image available. See: {}", apod.url).yellow()
+                    );
                     return;
                 }
                 println!("{}", MSG_CHANGING.yellow());
@@ -261,6 +284,16 @@ fn main() {
             println!("{}", MSG_CHANGING.yellow());
             wallpaper::set_from_url(URL_UNSPLASH).unwrap();
             println!("{}", MSG_DONE.green());
+        }
+        Some(("nasa_image", _)) => {
+            let image = get_nasa_image("", "", "", "", "", "", "", "");
+            println!("{}", image);
+            println!("{}", MSG_CHANGING.yellow());
+            if let Err(err) = wallpaper::set_from_url(&image.url) {
+                println!("{}", format!("Error: {}", err).red());
+            } else {
+                println!("{}", MSG_DONE.green());
+            }
         }
         Some(("license", _)) => {
             print_license();
