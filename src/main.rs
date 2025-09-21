@@ -1,5 +1,5 @@
 /*
-   Copyright 2019 David Población
+   Copyright 2019 David Población Criado
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ use std::fmt;
 use std::process;
 
 const LICENSE_TEXT: &str = r#"
-   Copyright 2019 David Población
+   Copyright 2019 David Población Criado
 
    Licensed under the Apache License, Version 2.0 (the 'License');
    you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ const LICENSE_TEXT: &str = r#"
 "#;
 
 const API_KEY: &str = "DEMO_KEY";
-const VERSION: &str = "2.1.0";
+const VERSION: &str = "2.1.1";
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
@@ -84,7 +84,6 @@ impl fmt::Display for Apod {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize)]
 struct NasaImage {
     nasa_id: String,
@@ -109,7 +108,13 @@ impl fmt::Display for NasaImage {
     }
 }
 
-/// Recupera APOD da NASA via HTTPS
+/// Gets the APOD image from the NASA
+/// # Parameters
+/// * date
+/// * api_key
+/// # Return
+/// Returns an APOD element if no errors ocurred.
+/// Otherwise, it returns an error
 fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     let request_url = format!(
         "https://api.nasa.gov/planetary/apod?api_key={api_key}&date={date}",
@@ -121,7 +126,20 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     Ok(response)
 }
 
-/// Recupera immagine casuale dalla libreria NASA
+/// Gets an image from the repository of the NASA
+/// # Parameters
+/// * q
+/// * center
+/// * location
+/// * nasa_id
+/// * photographer
+/// * title
+/// * year_start
+/// * year_end
+///
+/// # Return
+/// A NasaImage struct
+#[allow(clippy::too_many_arguments)]
 fn get_nasa_image(
     q: &str,
     center: &str,
@@ -154,6 +172,7 @@ fn get_nasa_image(
         .as_usize()
         .unwrap_or(0);
 
+    print!("Number of results: {}, {}", num_hits, request_url);
     if num_hits == 0 {
         println!("Couldn't find the file you're looking for. Try another tag.");
         process::exit(0x0100);
@@ -227,7 +246,7 @@ fn cli() -> Command {
     Command::new("nasa-wallpaper")
         .version(VERSION)
         .author("David Población Criado")
-        .about("Change desktop wallpaper with NASA photographs")
+        .about("Change desktop wallpaper with NASA images")
         .arg_required_else_help(true)
         .subcommand(
             Command::new("apod")
@@ -241,9 +260,76 @@ fn cli() -> Command {
                         .action(clap::ArgAction::SetTrue),
                 ),
         )
-        .subcommand(Command::new("nasa_image").about("Get a random NASA image"))
-        .subcommand(Command::new("unsplash").about("Get a random NASA image from Unsplash"))
-        .subcommand(Command::new("license").long_flag("license"))
+        .subcommand(
+            Command::new("nasa_image")
+                .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
+                .arg(
+                    Arg::new("query")
+                        .short('q')
+                        .long("query")
+                        .value_name("Q")
+                        .action(clap::ArgAction::Set)
+                        .help("Free text search terms to compare to all indexed metadata"),
+                )
+                .arg(
+                    Arg::new("center")
+                        .short('c')
+                        .long("center")
+                        .value_name("CENTER")
+                        .action(clap::ArgAction::Set)
+                        .help("NASA center which published the media"),
+                )
+                .arg(
+                    Arg::new("location")
+                        .short('o')
+                        .long("location")
+                        .value_name("LOCATION")
+                        .action(clap::ArgAction::Set)
+                        .help("Terms to search for in “Location” fields"),
+                )
+                .arg(
+                    Arg::new("nasa_id")
+                        .short('i')
+                        .long("nasa_id")
+                        .value_name("NASA_ID")
+                        .action(clap::ArgAction::Set)
+                        .help("The media asset’s NASA ID"),
+                )
+                .arg(
+                    Arg::new("photographer")
+                        .short('p')
+                        .long("phtographer")
+                        .value_name("PHOTOGRAPHER")
+                        .action(clap::ArgAction::Set)
+                        .help("The primary photographer’s name"),
+                )
+                .arg(
+                    Arg::new("title")
+                        .short('t')
+                        .long("title")
+                        .value_name("TITLE")
+                        .action(clap::ArgAction::Set)
+                        .help("Terms to search for in “Title” fields"),
+                )
+                .arg(
+                    Arg::new("year_start")
+                        .long("year_start")
+                        .value_name("YEAR_START")
+                        .action(clap::ArgAction::Set)
+                        .help("The start year for results. Format: YYYY"),
+                )
+                .arg(
+                    Arg::new("year_end")
+                        .long("year_end")
+                        .value_name("YEAR_END")
+                        .action(clap::ArgAction::Set)
+                        .help("The end year for results. Format: YYYY"),
+                ),
+        )
+        .subcommand(Command::new("unsplash").about(
+            "Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)",
+        ))
+        .subcommand(Command::new("license").about("Print the license of this program"))
 }
 
 fn main() {
@@ -266,10 +352,7 @@ fn main() {
             if let Ok(apod) = get_apod(date, api_key) {
                 println!("{}", apod);
                 if apod.media_type != "image" {
-                    println!(
-                        "{}",
-                        format!("No image available. See: {}", apod.url).yellow()
-                    );
+                    print!("{}, {}", "The date you have chosen for the APOD has no image. See the original content in: {}".yellow(), apod.url.yellow());
                     return;
                 }
                 println!("{}", MSG_CHANGING.yellow());
@@ -285,15 +368,56 @@ fn main() {
             wallpaper::set_from_url(URL_UNSPLASH).unwrap();
             println!("{}", MSG_DONE.green());
         }
-        Some(("nasa_image", _)) => {
-            let image = get_nasa_image("", "", "", "", "", "", "", "");
-            println!("{}", image);
+        Some(("nasa_image", sub_matches)) => {
+            let q = sub_matches
+                .get_one::<String>("query")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let center = sub_matches
+                .get_one::<String>("center")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let location = sub_matches
+                .get_one::<String>("location")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let nasa_id = sub_matches
+                .get_one::<String>("nasa_id")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let photographer = sub_matches
+                .get_one::<String>("photographer")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let title = sub_matches
+                .get_one::<String>("title")
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let year_start = sub_matches
+                .get_one::<String>("year_start")
+                .map(|s| s.as_str())
+                .unwrap_or("1900");
+            let (est_year, _, _) = get_today_est();
+            let est_year_str = est_year.to_string();
+            let year_end = sub_matches
+                .get_one::<String>("year_end")
+                .map(|s| s.as_str())
+                .unwrap_or(&est_year_str);
+
+            let nasa_image = get_nasa_image(
+                q,
+                center,
+                location,
+                nasa_id,
+                photographer,
+                title,
+                year_start,
+                year_end,
+            );
+            println!("{}", nasa_image);
             println!("{}", MSG_CHANGING.yellow());
-            if let Err(err) = wallpaper::set_from_url(&image.url) {
-                println!("{}", format!("Error: {}", err).red());
-            } else {
-                println!("{}", MSG_DONE.green());
-            }
+            wallpaper::set_from_url(&nasa_image.url).unwrap();
+            println!("{}", MSG_DONE.green());
         }
         Some(("license", _)) => {
             print_license();

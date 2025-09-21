@@ -105,4 +105,3 @@ Bug reports, feature requests, and improvements are also welcome via the [Issues
 ## 📜 License
 
 This project is licensed under the [APACHE 2.0 License](LICENSE).
-You are free to use, modify, and distribute it with attribution.
