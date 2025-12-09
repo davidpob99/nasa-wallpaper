@@ -9,10 +9,10 @@ repository = "https://github.com/davidpob99/nasa-wallpaper"
 
 [dependencies]
 clap = "4.5.53"
-reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12.25", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = "1.0.228"
 serde_derive = "1.0.203"
-wallpaper = { git = "https://github.com/davidpob99/wallpaper.rs", branch = "v3.2.0", features = ["from_url"] }
+wallpaper = { git = "https://github.com/davidpob99/wallpaper.rs", features = ["from_url"] }
 colored = "3.0.0"
 chrono = "0.4.42"
 chrono-tz = "0.10.4"

@@ -899,7 +899,7 @@ dependencies = [
  "colored",
  "json",
  "rand",
- "reqwest 0.12.24",
+ "reqwest 0.12.25",
  "serde",
  "serde_derive",
  "wallpaper",
@@ -1157,9 +1157,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.24"
+version = "0.12.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d0946410b9f7b082a427e4ef5c8ff541a88b357bc6c637c40db3a68ac70a36f"
+checksum = "b6eff9328d40131d43bd911d42d79eb6a47312002a4daefc9e37f17e74a7701a"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -1633,9 +1633,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.6"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adc82fd73de2a9722ac5da747f12383d2bfdb93591ee6c58486e0097890f05f2"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
  "bitflags 2.9.4",
  "bytes",
@@ -1724,13 +1724,14 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "wallpaper"
-version = "3.2.0"
-source = "git+https://github.com/davidpob99/wallpaper.rs?branch=v3.2.0#7359215a35dcc5c5a7fd35a8ea2867ebb02751a9"
+version = "4.0.0"
+source = "git+https://github.com/davidpob99/wallpaper.rs#859480053816dabe3a0343f3de16240359e17244"
 dependencies = [
  "dirs",
  "enquote",
  "reqwest 0.11.27",
  "rust-ini",
+ "thiserror 1.0.69",
  "winapi",
  "winreg 0.9.0",
 ]
