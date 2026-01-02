@@ -1,18 +1,18 @@
 [package]
 name = "nasa-wallpaper"
 description = "Change your desktop background with a NASA image"
-version = "2.1.1"
+version = "2.1.2"
 authors = ["David Población Criado <davidpblcrd@protonmail.com>"]
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/davidpob99/nasa-wallpaper"
 
 [dependencies]
-clap = "4.5.47"
-reqwest = { version = "0.12.4", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+clap = "4.5.53"
+reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = "1.0.228"
 serde_derive = "1.0.203"
-wallpaper = { git = "https://github.com/davidpob99/wallpaper.rs", branch = "v3.2.0", features = ["from_url"] }
+wallpaper = { package = "wallpaper-ng", version = "0.1.0", features = ["from_url"]}
 colored = "3.0.0"
 chrono = "0.4.42"
 chrono-tz = "0.10.4"

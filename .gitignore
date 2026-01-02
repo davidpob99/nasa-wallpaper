@@ -15,3 +15,6 @@ wallpaper.jpg
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+
+# Vagrant
+.vagrant
