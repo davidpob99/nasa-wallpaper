@@ -1,7 +1,7 @@
 # nasa-wallpaper
-
-![AUR Version](https://img.shields.io/aur/version/nasa-wallpaper)
 ![GitHub Release](https://img.shields.io/github/v/release/davidpob99/nasa-wallpaper)
+![Crates.io Version](https://img.shields.io/crates/v/nasa-wallpaper)
+![AUR Version](https://img.shields.io/aur/version/nasa-wallpaper)
 ![GitHub Downloads](https://img.shields.io/github/downloads/davidpob99/nasa-wallpaper/total)
 ![License](https://img.shields.io/github/license/davidpob99/nasa-wallpaper)
 
