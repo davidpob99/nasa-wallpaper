@@ -29,32 +29,41 @@ pub fn print_license() {
     println!("{}", LICENSE_TEXT);
 }
 
-pub fn set_from_url(url: &str) -> Result<()> {
+pub fn set_from_url(url: &str, overlay_text: Option<(&str, &str)>) -> Result<()> {
     let mut response = reqwest::blocking::get(url)
         .context("Failed to download image from URL")?;
-    
+
     let suffix = if url.to_lowercase().ends_with(".png") { ".png" } else { ".jpg" };
     
-    // Create a persistent file in the temp directory instead of using tempfile
-    // This ensures Windows has time to read the file before it's deleted
     let temp_dir = std::env::temp_dir();
-    let file_name = format!("nasa-wallpaper-{}{}", chrono::Utc::now().timestamp(), suffix);
-    let file_path = temp_dir.join(file_name);
-    
-    let mut file = std::fs::File::create(&file_path)
-        .context("Failed to create wallpaper file")?;
-
-    copy(&mut response, &mut file)
-        .context("Failed to write image to file")?;
-    
-    // Ensure the file is flushed to disk
-    drop(file);
+    let file_path = if let Some((title, explanation)) = overlay_text {
+        // Download to memory
+        let mut image_bytes = Vec::new();
+        copy(&mut response, &mut image_bytes)?;
+        
+        // Render overlay
+        crate::text_renderer::draw_overlay(&image_bytes, title, explanation)?
+    } else {
+        // Direct download to file
+        let file_name = format!("nasa-wallpaper-{}{}", chrono::Utc::now().timestamp(), suffix);
+        let path = temp_dir.join(file_name);
+        let mut file = std::fs::File::create(&path)
+            .context("Failed to create wallpaper file")?;
+        copy(&mut response, &mut file)
+            .context("Failed to write image to file")?;
+        path
+    };
 
     let path_str = file_path.to_str()
         .context("Failed to get file path")?;
 
-    wallpaper::set_from_path(path_str)
-        .map_err(|e| anyhow::anyhow!("Failed to set wallpaper: {}", e))?;
+    if let Err(e) = wallpaper::set_from_path(path_str) {
+        let err_string = e.to_string();
+        if err_string.contains("No such file or directory") || err_string.contains("os error 2") {
+             return Err(anyhow::anyhow!("Unable to set wallpaper. This is likely due to missing dependencies for your desktop environment. Please ensure you have the correct backend installed (e.g., 'feh', 'gsettings', 'qdbus'). See README for details.\nOriginal error: {}", e));
+        }
+        return Err(anyhow::anyhow!("Failed to set wallpaper: {}", e));
+    }
 
     // Note: We intentionally don't delete the file here to ensure Windows
     // has time to process it. Old wallpaper files can be cleaned up manually

@@ -21,6 +21,35 @@ A professional, lightweight tool to automatically set your desktop wallpaper wit
 
 ---
 
+## 🔑 NASA API Key (Recommended)
+
+While the app works with the default `DEMO_KEY`, it has strict rate limits and may timeout. **Get your free personal API key** for better reliability:
+
+1. Visit [https://api.nasa.gov/](https://api.nasa.gov/)
+2. Fill out the simple registration form (name + email)
+3. Receive your API key instantly via email
+
+### Using Your API Key
+
+**Option 1: Environment Variable (Recommended)**
+```bash
+# Linux/macOS
+export NASA_API_KEY="your_api_key_here"
+
+# Windows (PowerShell)
+$env:NASA_API_KEY="your_api_key_here"
+
+# Windows (CMD)
+set NASA_API_KEY=your_api_key_here
+```
+
+**Option 2: Command Line Argument**
+```bash
+nasa-wallpaper apod --key your_api_key_here
+```
+
+---
+
 ## ⚡ Quick Usage
 
 Set today’s **APOD** as wallpaper:

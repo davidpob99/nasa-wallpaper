@@ -1,6 +1,7 @@
 mod api;
 mod models;
 mod utils;
+mod text_renderer;
 
 use anyhow::Result;
 use clap::{Arg, Command};
@@ -14,9 +15,9 @@ const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
 
-fn set_wallpaper(apod: &Apod, low_res: bool) -> Result<()> {
+fn set_wallpaper(apod: &Apod, low_res: bool, overlay: Option<(&str, &str)>) -> Result<()> {
     let url = if low_res { &apod.url } else { &apod.hdurl };
-    crate::utils::set_from_url(url)
+    crate::utils::set_from_url(url, overlay)
 }
 
 fn cli() -> Command {
@@ -36,11 +37,25 @@ fn cli() -> Command {
                         .long("low")
                         .action(clap::ArgAction::SetTrue)
                         .help("Use low resolution image"),
+                )
+                .arg(
+                    Arg::new("explanation")
+                        .short('e')
+                        .long("explanation")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Add the explanation to the image"),
                 ),
         )
         .subcommand(
             Command::new("nasa_image")
                 .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
+                .arg(
+                    Arg::new("explanation")
+                        .short('e')
+                        .long("explanation")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Add the explanation to the image"),
+                )
                 .arg(
                     Arg::new("query")
                         .short('q')
@@ -121,10 +136,16 @@ fn main() -> Result<()> {
                 .get_one::<String>("date")
                 .map(|s| s.as_str())
                 .unwrap_or(&today);
+            
+            // Check for API key in this order: CLI arg > env var > DEMO_KEY
+            let env_api_key = std::env::var("NASA_API_KEY").ok();
             let api_key = sub_matches
                 .get_one::<String>("key")
                 .map(|s| s.as_str())
+                .or_else(|| env_api_key.as_deref())
                 .unwrap_or(API_KEY);
+            
+            
             let low_res = sub_matches.get_flag("low");
 
             let apod = api::get_apod(date, api_key)?;
@@ -136,12 +157,18 @@ fn main() -> Result<()> {
             }
 
             println!("{}", MSG_CHANGING.yellow());
-            set_wallpaper(&apod, low_res)?;
+            let overlay = if sub_matches.get_flag("explanation") {
+                Some((apod.title.as_str(), apod.explanation.as_str()))
+            } else {
+                None
+            };
+            set_wallpaper(&apod, low_res, overlay)?;
             println!("{}", MSG_DONE.green());
         }
         Some(("unsplash", _)) => {
             println!("{}", MSG_CHANGING.yellow());
-            crate::utils::set_from_url(URL_UNSPLASH)?;
+            // Unsplash command doesn't support explanation overlay yet as API struct is different or not fully used here
+            crate::utils::set_from_url(URL_UNSPLASH, None)?;
             println!("{}", MSG_DONE.green());
         }
         Some(("nasa_image", sub_matches)) => {
@@ -166,7 +193,14 @@ fn main() -> Result<()> {
             
             println!("{}", nasa_image);
             println!("{}", MSG_CHANGING.yellow());
-            crate::utils::set_from_url(&nasa_image.url)?;
+            
+            let overlay = if sub_matches.get_flag("explanation") {
+                Some((nasa_image.title.as_str(), nasa_image.description.as_str()))
+            } else {
+                None
+            };
+            
+            crate::utils::set_from_url(&nasa_image.url, overlay)?;
             println!("{}", MSG_DONE.green());
         }
         Some(("license", _)) => {
