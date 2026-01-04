@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "nasa-wallpaper"
-version = "2.1.2"
+version = "2.2.0"
 dependencies = [
  "anyhow",
  "chrono",

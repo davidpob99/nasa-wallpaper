@@ -4,13 +4,13 @@ use serde_json::Value;
 use crate::models::{Apod, NasaImage};
 
 pub fn get_apod(date: &str, api_key: &str) -> Result<Apod> {
-    let request_url = format!(
-        "https://api.nasa.gov/planetary/apod?api_key={api_key}&date={date}",
-        api_key = api_key,
-        date = date
-    );
+    let client = reqwest::blocking::Client::new();
+    let url = "https://api.nasa.gov/planetary/apod";
 
-    let response = reqwest::blocking::get(&request_url)
+    let response = client
+        .get(url)
+        .query(&[("api_key", api_key), ("date", date)])
+        .send()
         .context("Failed to send request to NASA APOD API")?
         .json::<Apod>()
         .context("Failed to parse APOD response")?;
