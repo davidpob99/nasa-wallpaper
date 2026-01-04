@@ -3,7 +3,6 @@ use chrono_tz::Tz;
 use chrono_tz::US::Eastern;
 use anyhow::{Context, Result};
 use std::io::copy;
-use tempfile::Builder;
 
 pub const LICENSE_TEXT: &str = r#"
    Copyright 2019 David Población Criado
@@ -36,23 +35,29 @@ pub fn set_from_url(url: &str) -> Result<()> {
     
     let suffix = if url.to_lowercase().ends_with(".png") { ".png" } else { ".jpg" };
     
-    let mut tmp_file = Builder::new()
-        .prefix("nasa-wallpaper")
-        .suffix(suffix)
-        .tempfile()
-        .context("Failed to create temporary file")?;
+    // Create a persistent file in the temp directory instead of using tempfile
+    // This ensures Windows has time to read the file before it's deleted
+    let temp_dir = std::env::temp_dir();
+    let file_name = format!("nasa-wallpaper-{}{}", chrono::Utc::now().timestamp(), suffix);
+    let file_path = temp_dir.join(file_name);
+    
+    let mut file = std::fs::File::create(&file_path)
+        .context("Failed to create wallpaper file")?;
 
-    copy(&mut response, &mut tmp_file)
-        .context("Failed to write image to temporary file")?;
+    copy(&mut response, &mut file)
+        .context("Failed to write image to file")?;
+    
+    // Ensure the file is flushed to disk
+    drop(file);
 
-    let path = tmp_file.path().to_str()
-        .context("Failed to get temporary file path")?;
+    let path_str = file_path.to_str()
+        .context("Failed to get file path")?;
 
-    wallpaper::set_from_path(path)
+    wallpaper::set_from_path(path_str)
         .map_err(|e| anyhow::anyhow!("Failed to set wallpaper: {}", e))?;
 
-    // On Windows, the wallpaper setter might need the file to persist for a bit 
-    // or it might copy it. wallpaper crate seems to handle it, but we keep 
-    // the tmp_file alive until the end of this function.
+    // Note: We intentionally don't delete the file here to ensure Windows
+    // has time to process it. Old wallpaper files can be cleaned up manually
+    // from the temp directory if needed.
     Ok(())
 }
