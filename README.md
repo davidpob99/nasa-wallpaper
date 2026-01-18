@@ -26,9 +26,8 @@ You can choose images from:
 ---
 
 ## ⚡ Installation
-- **Crates**: `cargo install nasa-wallpaper`
-- **Manual**: download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page or downloa d
-Open a terminal and simply run it.
+- **Crates**: `cargo install nasa-wallpaper`.
+- **Manual**: download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page.
 - **Arch Linux**: you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
 
 ---
