@@ -1,107 +1,105 @@
-# nasa-wallpaper
+# 🚀 nasa-wallpaper
 ![GitHub Release](https://img.shields.io/github/v/release/davidpob99/nasa-wallpaper)
 ![Crates.io Version](https://img.shields.io/crates/v/nasa-wallpaper)
-![AUR Version](https://img.shields.io/aur/version/nasa-wallpaper)
-![GitHub Downloads](https://img.shields.io/github/downloads/davidpob99/nasa-wallpaper/total)
 ![License](https://img.shields.io/github/license/davidpob99/nasa-wallpaper)
 
-A lightweight tool to automatically set your desktop wallpaper with stunning NASA images.
-You can choose images from:
+A professional, lightweight tool to automatically set your desktop wallpaper with stunning NASA images. Refactored for extreme robustness and modern Rust standards.
 
-* [APOD (Astronomical Picture of the Day)](https://apod.nasa.gov/apod/)
-* [NASA Image Library](https://images.nasa.gov/)
-* [NASA on Unsplash](https://unsplash.com/@nasa)
-
-![Example](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
+## ✨ Sources
+- 🌌 **APOD**: [Astronomy Picture of the Day](https://apod.nasa.gov/apod/)
+- 🔍 **NASA Image Library**: Massive searchable archive at [images.nasa.gov](https://images.nasa.gov/)
+- 📸 **NASA Unsplash**: Curated high-res images from [Unsplash/@nasa](https://unsplash.com/@nasa)
 
 ---
 
-## 🌍 Supported Platforms
-
-* **Windows**
-* **macOS**
-* **GNOME**, **KDE**, **Cinnamon**, **Unity**, **Budgie**, **XFCE**, **LXDE**, **MATE**, **Deepin**
-* **Wayland** (set only, requires `swaybg`)
-* **i3** (set only, requires `feh`)
+## 🛠️ Key Improvements in v2.2.0
+- **Modular Architecture**: Clean, maintainable codebase split into specialized modules.
+- **Robust Error Handling**: Powered by `anyhow`, ensuring the app never crashes silently.
+- **Improved Search**: Enhanced NASA Image Library search with proper URL encoding and randomized results.
+- **Modern Stack**: Updated to latest dependencies (`clap` v4, `reqwest` v0.12, `serde`).
+- **Safe Downloads**: Implemented secure temporary file handling for cross-platform reliability.
 
 ---
 
-## ⚡ Installation
+## 🔑 NASA API Key (Recommended)
 
-Download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page.
-Open a terminal and simply run it.
+While the app works with the default `DEMO_KEY`, it has strict rate limits and may timeout. **Get your free personal API key** for better reliability:
 
-On Arch Linux, you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
+1. Visit [https://api.nasa.gov/](https://api.nasa.gov/)
+2. Fill out the simple registration form (name + email)
+3. Receive your API key instantly via email
+
+### Using Your API Key
+
+**Option 1: Environment Variable (Recommended)**
+```bash
+# Linux/macOS
+export NASA_API_KEY="your_api_key_here"
+
+# Windows (PowerShell)
+$env:NASA_API_KEY="your_api_key_here"
+
+# Windows (CMD)
+set NASA_API_KEY=your_api_key_here
+```
+
+**Option 2: Command Line Argument**
+```bash
+nasa-wallpaper apod --key your_api_key_here
+```
+
+---
+
+## ⚡ Quick Usage
+
+Set today’s **APOD** as wallpaper:
+```bash
+nasa-wallpaper apod
+```
+
+Set the **APOD** for a specific date:
+```bash
+nasa-wallpaper apod --date 2023-12-25
+```
+
+Set a random image from the **NASA Image Library**:
+```bash
+nasa-wallpaper nasa_image
+```
+
+Search for a specific topic (e.g., *Mars*):
+```bash
+nasa-wallpaper nasa_image --query "Mars"
+```
+
+Get a random image from **Unsplash**:
+```bash
+nasa-wallpaper unsplash
+```
 
 ---
 
 ## 🔧 Build from Source
-
 Requirements: [Rust](https://www.rust-lang.org/) **2021 edition or newer**.
 
-Clone the repository and run:
-
 ```bash
+git clone https://github.com/davidpob99/nasa-wallpaper
+cd nasa-wallpaper
 cargo build --release
 ```
-
-The compiled binary will be available under `target/release/`.
-
----
-
-## 🚀 Quick Usage
-
-* Set today’s APOD as wallpaper:
-
-  ```bash
-  nasa-wallpaper -a
-  ```
-
-* Set the APOD for **March 27, 1999**:
-
-  ```bash
-  nasa-wallpaper -a -d 1999-03-27
-  ```
-
-* Set a random image from the NASA Image Library:
-
-  ```bash
-  nasa-wallpaper -n
-  ```
-
-* Set a random image with the keyword *earth*:
-
-  ```bash
-  nasa-wallpaper -n -q earth
-  ```
-
-* Show help:
-
-  ```bash
-  nasa-wallpaper --help
-  nasa-wallpaper -h
-  ```
-
-📖 **Full documentation:** [Wiki – Command Line Help](https://github.com/davidpob99/nasa-wallpaper/wiki/Command%E2%80%90Line-Help)
 
 ---
 
 ## 🤝 Contributing
+Contributions are what make the open source community such an amazing place to learn, inspire, and create.
 
-Contributions are welcome! 🎉
-
-If you’d like to contribute:
-
-1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -m 'Add your feature'`)
-4. Push the branch (`git push origin feature/your-feature`)
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
-Bug reports, feature requests, and improvements are also welcome via the [Issues](https://github.com/davidpob99/nasa-wallpaper/issues) page.
 
 ---
 
 ## 📜 License
-
-This project is licensed under the [APACHE 2.0 License](LICENSE).
+Distributed under the **Apache 2.0 License**. See `LICENSE` for more information.

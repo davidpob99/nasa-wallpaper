@@ -1,0 +1,27 @@
+warning: unused imports: `DynamicImage` and `RgbaImage`
+ --> src\text_renderer.rs:1:13
+  |
+1 | ...::{DynamicImage, Rgba, RgbaImage, G...
+  |       ^^^^^^^^^^^^        ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src\text_renderer.rs:11:9
+   |
+11 | ...et mut image = ...
+   |       ----^^^^^
+   |       |
+   |       help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nasa-wallpaper` (bin "nasa-wallpaper") generated 2 warnings (run `cargo fix --bin "nasa-wallpaper" -p nasa-wallpaper` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running `target\debug\nasa-wallpaper.exe apod -e`
+Error: Failed to send request to NASA APOD API
+
+Caused by:
+    0: error sending request for url (https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=2026-01-04)
+    1: operation timed out
+error: process didn't exit successfully: `target\debug\nasa-wallpaper.exe apod -e` (exit code: 1)

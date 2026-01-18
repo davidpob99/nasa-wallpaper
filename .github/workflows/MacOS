@@ -5,8 +5,6 @@ on:
       - master
   pull_request:
     types: [opened, synchronize, reopened]
-permissions:
-  contents: read
 jobs:
   sonarqube:
     name: SonarQube
@@ -16,6 +14,6 @@ jobs:
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

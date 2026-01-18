@@ -1,0 +1,14 @@
+    Checking nasa-wallpaper v2.2.0 (C:\Users\maule\Desktop\repo\nasa-wallpaper)
+error: mismatched closing delimiter: `}`
+   --> src\main.rs:29:20
+    |
+ 23 | fn cli() -> Command {
+    |                     - closing delimiter possibly meant for this
+...
+ 29 |         .subcommand(
+    |                    ^ unclosed delimiter
+...
+125 | }
+    | ^ mismatched closing delimiter
+
+error: could not compile `nasa-wallpaper` (bin "nasa-wallpaper") due to 1 previous error
