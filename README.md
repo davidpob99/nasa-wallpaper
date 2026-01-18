@@ -21,17 +21,15 @@ You can choose images from:
 * **Windows**
 * **macOS**
 * **GNOME**, **KDE**, **Cinnamon**, **Unity**, **Budgie**, **XFCE**, **LXDE**, **MATE**, **Deepin**
-* **Wayland** (set only, requires `swaybg`)
-* **i3** (set only, requires `feh`)
+* **i3**
 
 ---
 
 ## ⚡ Installation
-
-Download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page.
+- **Crates**: `cargo install nasa-wallpaper`
+- **Manual**: download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page or downloa d
 Open a terminal and simply run it.
-
-On Arch Linux, you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
+- **Arch Linux**: you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
 
 ---
 
@@ -54,32 +52,31 @@ The compiled binary will be available under `target/release/`.
 * Set today’s APOD as wallpaper:
 
   ```bash
-  nasa-wallpaper -a
+  nasa-wallpaper apod
   ```
 
 * Set the APOD for **March 27, 1999**:
 
   ```bash
-  nasa-wallpaper -a -d 1999-03-27
+  nasa-wallpaper apod -d 1999-03-27
   ```
 
 * Set a random image from the NASA Image Library:
 
   ```bash
-  nasa-wallpaper -n
+  nasa-wallpaper nasa_image
   ```
 
 * Set a random image with the keyword *earth*:
 
   ```bash
-  nasa-wallpaper -n -q earth
+  nasa-wallpaper nasa_image -q earth
   ```
 
 * Show help:
 
   ```bash
-  nasa-wallpaper --help
-  nasa-wallpaper -h
+  nasa-wallpaper help
   ```
 
 📖 **Full documentation:** [Wiki – Command Line Help](https://github.com/davidpob99/nasa-wallpaper/wiki/Command%E2%80%90Line-Help)
@@ -93,12 +90,13 @@ Contributions are welcome! 🎉
 If you’d like to contribute:
 
 1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -m 'Add your feature'`)
-4. Push the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
-
-Bug reports, feature requests, and improvements are also welcome via the [Issues](https://github.com/davidpob99/nasa-wallpaper/issues) page.
+2. Create a issue (patch or feature)
+3. Create a local branch that corresponds to the issue. To easily identify the purpose of branches different keywords must be used:
+   - Patch branches must be named `patch-[issue number]-[short description]`
+   - Feature branches must be named `feature-[issue number]-[short description]`
+4. Commit your changes
+5. Push the branch
+6. Open a Pull Request. Please ensure that an issue exists before submitting your contribution as a pull request
 
 ---
 

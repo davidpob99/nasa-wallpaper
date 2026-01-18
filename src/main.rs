@@ -1,5 +1,5 @@
 /*
-   Copyright 2019 David Población Criado
+   Copyright 2019-2026 David Población Criado
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -33,11 +33,12 @@ use clap::{Arg, Command};
 use colored::*;
 use rand::Rng;
 use std::error::Error;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::process;
 
 const LICENSE_TEXT: &str = r#"
-   Copyright 2019 David Población Criado
+   Copyright 2019-2026 David Población Criado
 
    Licensed under the Apache License, Version 2.0 (the 'License');
    you may not use this file except in compliance with the License.
@@ -72,6 +73,9 @@ struct Apod {
 }
 
 impl fmt::Display for Apod {
+    /// Formats an [`Apod`] instance for terminal output.
+    ///
+    /// This is the text shown by `println!("{apod}")`.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -95,6 +99,9 @@ struct NasaImage {
 }
 
 impl fmt::Display for NasaImage {
+    /// Formats a [`NasaImage`] instance for terminal output.
+    ///
+    /// This is the text shown by `println!("{nasa_image}")`.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -108,13 +115,18 @@ impl fmt::Display for NasaImage {
     }
 }
 
-/// Gets the APOD image from the NASA
-/// # Parameters
-/// * date
-/// * api_key
-/// # Return
-/// Returns an APOD element if no errors ocurred.
-/// Otherwise, it returns an error
+/// Fetches NASA's Astronomy Picture of the Day (APOD) metadata.
+///
+/// # Arguments
+/// - `date`: Date string in `YYYY-MM-DD` format.
+/// - `api_key`: NASA API key (e.g. `DEMO_KEY`).
+///
+/// # Returns
+/// An [`Apod`] struct populated from the API response.
+///
+/// # Errors
+/// Returns a [`reqwest::Error`] if the request fails or the response body
+/// cannot be deserialized.
 fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     let request_url = format!(
         "https://api.nasa.gov/planetary/apod?api_key={api_key}&date={date}",
@@ -126,19 +138,31 @@ fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
     Ok(response)
 }
 
-/// Gets an image from the repository of the NASA
-/// # Parameters
-/// * q
-/// * center
-/// * location
-/// * nasa_id
-/// * photographer
-/// * title
-/// * year_start
-/// * year_end
+/// Fetches a random image from the NASA Image and Video Library.
 ///
-/// # Return
-/// A NasaImage struct
+/// This performs a search against `https://images-api.nasa.gov/search` and then
+/// chooses a random result (potentially from a random page).
+///
+/// # Arguments
+/// - `q`: Free text search terms.
+/// - `center`: NASA center which published the media.
+/// - `location`: Terms to search for in “Location” fields.
+/// - `nasa_id`: The media asset’s NASA ID.
+/// - `photographer`: The primary photographer’s name.
+/// - `title`: Terms to search for in “Title” fields.
+/// - `year_start`: Start year for results (`YYYY`).
+/// - `year_end`: End year for results (`YYYY`).
+///
+/// # Returns
+/// A [`NasaImage`] struct containing the selected item's metadata and a direct URL.
+///
+/// # Panics
+/// This function uses `expect`/`unwrap` internally and may panic on network,
+/// parsing, or response-shape errors.
+///
+/// # Exits
+/// If the search yields zero results, this prints a message and terminates the
+/// process with a non-zero exit code.
 #[allow(clippy::too_many_arguments)]
 fn get_nasa_image(
     q: &str,
@@ -224,6 +248,18 @@ fn get_nasa_image(
     }
 }
 
+/// Sets the system wallpaper to the APOD image.
+///
+/// # Arguments
+/// - `apod`: APOD metadata previously fetched from the API.
+/// - `hd`: When `true`, use `apod.hdurl`; otherwise use `apod.url`.
+///
+/// # Errors
+/// Returns an error if the underlying wallpaper backend fails to download or
+/// set the image.
+///
+/// # Notes
+/// If `apod.hdurl` is empty for a given day, using `hd = true` may fail.
 fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     if hd {
         wallpaper::set_from_url(&apod.hdurl)?;
@@ -233,15 +269,21 @@ fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
     Ok(())
 }
 
+/// Prints the program license text to stdout.
 fn print_license() {
     println!("{}", LICENSE_TEXT);
 }
 
+/// Returns today's date in US Eastern time (EST/EDT).
+///
+/// The APOD "day" is keyed off US Eastern time, so using this avoids fetching
+/// "tomorrow" in other time zones.
 fn get_today_est() -> (i32, u32, u32) {
     let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
     (est_now.year(), est_now.month(), est_now.day())
 }
 
+/// Builds the CLI definition (commands/flags) for `nasa-wallpaper`.
 fn cli() -> Command {
     Command::new("nasa-wallpaper")
         .version(VERSION)
@@ -332,8 +374,30 @@ fn cli() -> Command {
         .subcommand(Command::new("license").about("Print the license of this program"))
 }
 
+/// Normalizes arguments for backwards-compatible shorthand flags.
+///
+/// Converts legacy forms like `nasa-wallpaper -a ...` into
+/// `nasa-wallpaper apod ...` and similarly `-n` to `nasa_image`.
+fn normalize_args(mut args: Vec<OsString>) -> Vec<OsString> {
+    // Backwards-compatible shorthand flags:
+    // `nasa-wallpaper -a ...` => `nasa-wallpaper apod ...`
+    // `nasa-wallpaper -n ...` => `nasa-wallpaper nasa_image ...`
+    if args.len() >= 2 {
+        if args[1] == OsStr::new("-a") {
+            args[1] = OsString::from("apod");
+        } else if args[1] == OsStr::new("-n") {
+            args[1] = OsString::from("nasa_image");
+        }
+    }
+    args
+}
+
+/// Program entry point.
+///
+/// Parses CLI arguments and dispatches to the chosen subcommand.
 fn main() {
-    let matches = cli().get_matches();
+    let args = normalize_args(std::env::args_os().collect());
+    let matches = cli().get_matches_from(args);
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {
