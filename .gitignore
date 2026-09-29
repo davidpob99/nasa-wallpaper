@@ -18,3 +18,5 @@ wallpaper.jpg
 
 # Vagrant
 .vagrant
+
+.env
