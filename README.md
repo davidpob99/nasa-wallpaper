@@ -14,7 +14,6 @@ You can choose images from:
 
 ![Example](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
 
----
 
 ## 🌍 Supported Platforms
 
@@ -23,7 +22,6 @@ You can choose images from:
 * **GNOME**, **KDE**, **Cinnamon**, **Unity**, **Budgie**, **XFCE**, **LXDE**, **MATE**, **Deepin**
 * **i3**
 
----
 
 ## ⚡ Installation
 - **Crates**: `cargo install nasa-wallpaper`
@@ -31,7 +29,6 @@ You can choose images from:
 Open a terminal and simply run it.
 - **Arch Linux**: you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
 
----
 
 ## 🔧 Build from Source
 
@@ -45,7 +42,6 @@ cargo build --release
 
 The compiled binary will be available under `target/release/`.
 
----
 
 ## 🚀 Quick Usage
 
@@ -60,6 +56,15 @@ The compiled binary will be available under `target/release/`.
   ```bash
   nasa-wallpaper apod -d 1999-03-27
   ```
+
+* Use a lower resolution version of the APOD image:
+
+  ```bash
+  nasa-wallpaper apod -l
+  ```
+
+  > APOD data comes from the [APOD Basic API](https://science.nasa.gov/wp-json/wp/v2/apod-basic) on
+  > `science.nasa.gov`, which doesn't need an API key. The old `-k/--key` option is still accepted but ignored.
 
 * Set a random image from the NASA Image Library:
 
@@ -81,7 +86,6 @@ The compiled binary will be available under `target/release/`.
 
 📖 **Full documentation:** [Wiki – Command Line Help](https://github.com/davidpob99/nasa-wallpaper/wiki/Command%E2%80%90Line-Help)
 
----
 
 ## 🤝 Contributing
 
@@ -93,24 +97,25 @@ This project follows the [Gitflow](https://nvie.com/posts/a-successful-git-branc
 |-----------------------|-----------------------------------------------------------|--------------|----------------------|
 | `master`              | Production-ready code. Every commit is a tagged release   | —            | —                    |
 | `develop`             | Integration branch for the next release                   | `master`     | —                    |
+| `bugfix/<issue>-<short-description>`  | Fix bugs                                  | `develop`    | `develop`            |
 | `feature/<issue>-<short-description>` | New features                              | `develop`    | `develop`            |
 | `release/<version>`   | Release preparation (version bump, final fixes)           | `develop`    | `master` and `develop` |
 | `hotfix/<issue>-<short-description>`  | Urgent fixes for production               | `master`     | `master` and `develop` |
+
 
 If you’d like to contribute:
 
 1. Fork this repository
 2. Create an issue describing the feature or bug
 3. Create a branch that corresponds to the issue, following the naming conventions above:
-   - Features: branch off `develop` as `feature/[issue number]-[short description]` (e.g. `feature/37-automatise-upload-of-versions`)
-   - Hotfixes: branch off `master` as `hotfix/[issue number]-[short description]`
+  - Bugs: branch off `develop` as `bugfix/[issue number]-[short description]` (e.g. `feature/50-update-nasa-api-url`)
+  - Features: branch off `develop` as `feature/[issue number]-[short description]` (e.g. `feature/37-automatise-upload-of-versions`)
+  - Hotfixes: branch off `master` as `hotfix/[issue number]-[short description]`
 4. Commit your changes
 5. Push the branch
-6. Open a Pull Request against `develop` (features) or `master` (hotfixes). Please ensure that an issue exists before submitting your contribution as a pull request
+6. Open a Pull Request against `develop` (bugfixes, features) or `master` (hotfixes). Please ensure that an issue exists before submitting your contribution as a pull request
 
 > `master` and `develop` are never committed to directly. `release/*` branches are created by the maintainers.
-
----
 
 ## 📜 License
 
