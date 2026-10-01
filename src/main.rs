@@ -51,25 +51,47 @@ const LICENSE_TEXT: &str = r#"
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 "#;
 
-const API_KEY: &str = "DEMO_KEY";
-const VERSION: &str = "2.1.1";
+const VERSION: &str = "2.1.3";
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
+/// APOD Basic JSON endpoint
+const APOD_API_URL: &str = "https://science.nasa.gov/wp-json/wp/v2/apod-basic";
+/// Width (in pixels) requested from the image CDN when `--low` is used.
+const LOW_RES_WIDTH: u32 = 1024;
 
 type WallpaperResult<T> = Result<T, Box<dyn Error>>;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Apod {
-    #[serde(default)]
-    copyright: String,
     date: String,
-    explanation: String,
-    #[serde(default)]
-    hdurl: String,
-    media_type: String,
     title: String,
+    media_type: String,
+    /// May contain HTML markup.
+    #[serde(default)]
+    explanation: String,
+    /// May contain HTML markup.
+    #[serde(default)]
+    copyright: Option<String>,
+    /// URL of the APOD post page (not an image).
     url: String,
+    /// Full-size image URL, when available.
+    #[serde(default)]
+    hdurl: Option<String>,
+}
+
+impl Apod {
+    /// Returns the image URL to use as wallpaper, if the APOD has one.
+    ///
+    /// When `low` is `true`, a reduced-size version is requested (see [`low_res_url`]).
+    fn image_url(&self, low: bool) -> Option<String> {
+        let hdurl = self.hdurl.as_deref().filter(|u| !u.is_empty())?;
+        if low {
+            Some(low_res_url(hdurl))
+        } else {
+            Some(hdurl.to_owned())
+        }
+    }
 }
 
 impl fmt::Display for Apod {
@@ -79,11 +101,12 @@ impl fmt::Display for Apod {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Title: {}\nDate: {}\nExplanation: {}\nCopyright: {}",
-            self.title.bold().italic(),
+            "Title: {}\nDate: {}\nExplanation: {}\nCopyright: {}\nLink: {}",
+            html_to_text(&self.title).bold().italic(),
             self.date.italic(),
-            self.explanation,
-            self.copyright
+            html_to_text(&self.explanation),
+            html_to_text(self.copyright.as_deref().unwrap_or("")),
+            self.url
         )
     }
 }
@@ -115,27 +138,141 @@ impl fmt::Display for NasaImage {
     }
 }
 
+/// Parses a user-supplied APOD date in `YYYY-MM-DD` format.
+///
+/// Month and day may be written without zero padding (e.g. `2026-9-3`).
+fn parse_apod_date(date: &str) -> Result<NaiveDate, chrono::ParseError> {
+    NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
+}
+
+/// Returns the legacy APOD date code (`YYMMDD`) used by the APOD API routes.
+fn apod_date_code(date: NaiveDate) -> String {
+    date.format("%y%m%d").to_string()
+}
+
+/// Converts an HTML fragment from the APOD API into plain terminal text.
+///
+/// Removes a leading `Explanation:` label, turns `<br>` into line breaks,
+/// strips every other tag and decodes common HTML entities.
+fn html_to_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find('<') {
+        text.push_str(&rest[..start]);
+        match rest[start..].find('>') {
+            Some(end) => {
+                let tag = rest[start + 1..start + end].trim().to_ascii_lowercase();
+                let name = tag.trim_start_matches('/').split([' ', '/']).next();
+                if name == Some("br") {
+                    text.push('\n');
+                }
+                rest = &rest[start + end + 1..];
+            }
+            None => {
+                text.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    text.push_str(rest);
+
+    let text = decode_html_entities(&text);
+    let text = text.trim();
+    text.strip_prefix("Explanation:")
+        .unwrap_or(text)
+        .trim()
+        .to_owned()
+}
+
+/// Decodes named entities commonly found in APOD texts and numeric entities.
+fn decode_html_entities(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('&') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let decoded = after.find(';').filter(|&end| end <= 10).and_then(|end| {
+            let entity = &after[..end];
+            let c = match entity {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                "nbsp" => Some(' '),
+                _ => entity
+                    .strip_prefix("#x")
+                    .or_else(|| entity.strip_prefix("#X"))
+                    .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+                    .or_else(|| entity.strip_prefix('#').and_then(|dec| dec.parse().ok()))
+                    .and_then(char::from_u32),
+            };
+            c.map(|c| (c, end))
+        });
+        match decoded {
+            Some((c, end)) => {
+                out.push(c);
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Returns a reduced-size version of an APOD image URL.
+///
+/// Only URLs served by NASA's resizing CDN (`/dynamicimage/`) can be resized;
+/// any other URL is returned unchanged.
+fn low_res_url(url: &str) -> String {
+    if !url.contains("/dynamicimage/") {
+        return url.to_owned();
+    }
+    let base = url.split(['?', '#']).next().unwrap_or(url);
+    format!("{base}?w={LOW_RES_WIDTH}&fit=clip")
+}
+
 /// Fetches NASA's Astronomy Picture of the Day (APOD) metadata.
 ///
 /// # Arguments
-/// - `date`: Date string in `YYYY-MM-DD` format.
-/// - `api_key`: NASA API key (e.g. `DEMO_KEY`).
+/// - `base_url`: URL of the APOD API (normally [`APOD_API_URL`]).
+/// - `date`: Day of the APOD to fetch.
 ///
 /// # Returns
 /// An [`Apod`] struct populated from the API response.
 ///
 /// # Errors
-/// Returns a [`reqwest::Error`] if the request fails or the response body
-/// cannot be deserialized.
-fn get_apod(date: &str, api_key: &str) -> Result<Apod, reqwest::Error> {
+/// Returns an error if the request fails, the API answers with a non-2xx
+/// status (the API's error message is included when available) or the
+/// response body cannot be deserialized.
+fn get_apod(base_url: &str, date: NaiveDate) -> WallpaperResult<Apod> {
     let request_url = format!(
-        "https://api.nasa.gov/planetary/apod?api_key={api_key}&date={date}",
-        api_key = api_key,
-        date = date
+        "{}/{}",
+        base_url.trim_end_matches('/'),
+        apod_date_code(date)
     );
 
-    let response = reqwest::blocking::get(&request_url)?.json::<Apod>()?;
-    Ok(response)
+    let response = reqwest::blocking::get(&request_url)?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().unwrap_or_default();
+        // Error bodies look like `{"code": "apod_basic_not_found", "message": "APOD not found."}`.
+        let message = match json::parse(&body).ok().and_then(|err| {
+            err["message"]
+                .as_str()
+                .map(|m| format!("{} [{}]", m, err["code"]))
+        }) {
+            Some(detail) => format!("APOD API error ({}): {}", status.as_u16(), detail),
+            None => format!("APOD API error ({})", status),
+        };
+        return Err(message.into());
+    }
+
+    Ok(response.json::<Apod>()?)
 }
 
 /// Fetches a random image from the NASA Image and Video Library.
@@ -252,20 +389,16 @@ fn get_nasa_image(
 ///
 /// # Arguments
 /// - `apod`: APOD metadata previously fetched from the API.
-/// - `hd`: When `true`, use `apod.hdurl`; otherwise use `apod.url`.
+/// - `low`: When `true`, use a reduced-size image (see [`Apod::image_url`]).
 ///
 /// # Errors
-/// Returns an error if the underlying wallpaper backend fails to download or
-/// set the image.
-///
-/// # Notes
-/// If `apod.hdurl` is empty for a given day, using `hd = true` may fail.
-fn set_wallpaper(apod: &Apod, hd: bool) -> WallpaperResult<()> {
-    if hd {
-        wallpaper::set_from_url(&apod.hdurl)?;
-    } else {
-        wallpaper::set_from_url(&apod.url)?;
-    }
+/// Returns an error if the APOD has no image URL, or if the underlying
+/// wallpaper backend fails to download or set the image.
+fn set_wallpaper(apod: &Apod, low: bool) -> WallpaperResult<()> {
+    let url = apod
+        .image_url(low)
+        .ok_or("The APOD for this date has no image URL")?;
+    wallpaper::set_from_url(&url)?;
     Ok(())
 }
 
@@ -293,13 +426,28 @@ fn cli() -> Command {
         .subcommand(
             Command::new("apod")
                 .about("Get the APOD (Astronomical Picture of the Day)")
-                .arg(Arg::new("date").short('d').long("date").value_name("DATE"))
-                .arg(Arg::new("key").short('k').long("key").value_name("API_KEY"))
+                .arg(
+                    Arg::new("date")
+                        .short('d')
+                        .long("date")
+                        .value_name("DATE")
+                        .help("Date of the APOD. Format: YYYY-MM-DD (default: today)"),
+                )
+                // Deprecated: the new APOD API does not need a key. Kept (hidden)
+                // so existing scripts keep working.
+                .arg(
+                    Arg::new("key")
+                        .short('k')
+                        .long("key")
+                        .value_name("API_KEY")
+                        .hide(true),
+                )
                 .arg(
                     Arg::new("low")
                         .short('l')
                         .long("low")
-                        .action(clap::ArgAction::SetTrue),
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Use a lower resolution image"),
                 ),
         )
         .subcommand(
@@ -401,31 +549,55 @@ fn main() {
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {
-            let (year, month, day) = get_today_est();
-            let today = format!("{}-{}-{}", year, month, day);
-            let date = sub_matches
-                .get_one::<String>("date")
-                .map(|s| s.as_str())
-                .unwrap_or(&today);
-            let api_key = sub_matches
-                .get_one::<String>("key")
-                .map(|s| s.as_str())
-                .unwrap_or(API_KEY);
-            let hd = sub_matches.get_flag("low");
-
-            if let Ok(apod) = get_apod(date, api_key) {
-                println!("{}", apod);
-                if apod.media_type != "image" {
-                    print!("{}, {}", "The date you have chosen for the APOD has no image. See the original content in: {}".yellow(), apod.url.yellow());
-                    return;
+            let date = match sub_matches.get_one::<String>("date") {
+                Some(date) => match parse_apod_date(date) {
+                    Ok(date) => date,
+                    Err(err) => {
+                        eprintln!(
+                            "{}",
+                            format!("Error: invalid date '{}' ({}). Use YYYY-MM-DD", date, err)
+                                .red()
+                        );
+                        process::exit(1);
+                    }
+                },
+                None => {
+                    let (year, month, day) = get_today_est();
+                    NaiveDate::from_ymd_opt(year, month, day).expect("valid date")
                 }
-                println!("{}", MSG_CHANGING.yellow());
-                if let Err(err) = set_wallpaper(&apod, hd) {
-                    println!("{}", format!("Error: {}", err).red());
-                } else {
-                    println!("{}", MSG_DONE.green());
-                }
+            };
+            if sub_matches.get_one::<String>("key").is_some() {
+                println!(
+                    "{}",
+                    "Warning: the APOD API no longer requires an API key. The --key option is ignored."
+                        .yellow()
+                );
             }
+            let low = sub_matches.get_flag("low");
+
+            let apod = match get_apod(APOD_API_URL, date) {
+                Ok(apod) => apod,
+                Err(err) => {
+                    eprintln!("{}", format!("Error: {}", err).red());
+                    process::exit(1);
+                }
+            };
+            println!("{}", apod);
+            if apod.media_type != "image" {
+                println!(
+                    "{} {}",
+                    "The date you have chosen for the APOD has no image. See the original content in:"
+                        .yellow(),
+                    apod.url.yellow()
+                );
+                return;
+            }
+            println!("{}", MSG_CHANGING.yellow());
+            if let Err(err) = set_wallpaper(&apod, low) {
+                eprintln!("{}", format!("Error: {}", err).red());
+                process::exit(1);
+            }
+            println!("{}", MSG_DONE.green());
         }
         Some(("unsplash", _)) => {
             println!("{}", MSG_CHANGING.yellow());
@@ -489,3 +661,6 @@ fn main() {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests;
