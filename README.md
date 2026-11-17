@@ -63,6 +63,12 @@ The compiled binary will be available under `target/release/`.
   nasa-wallpaper apod -l
   ```
 
+* Engrave the APOD title and explanation directly onto the wallpaper:
+
+  ```bash
+  nasa-wallpaper apod -e
+  ```
+
   > APOD data comes from the [APOD Basic API](https://science.nasa.gov/wp-json/wp/v2/apod-basic) on
   > `science.nasa.gov`, which doesn't need an API key. The old `-k/--key` option is still accepted but ignored.
 
