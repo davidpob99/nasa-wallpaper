@@ -31,7 +31,7 @@ use chrono_tz::Tz;
 use chrono_tz::US::Eastern;
 use clap::{Arg, Command};
 use colored::*;
-use rand::Rng;
+use rand::RngExt;
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
