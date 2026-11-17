@@ -20,3 +20,6 @@ wallpaper.jpg
 .vagrant
 
 .env
+# Logs
+*.log
+
