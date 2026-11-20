@@ -1,3 +1,4 @@
+pub mod text_renderer;
 /*
    Copyright 2019-2026 David Población Criado
 
