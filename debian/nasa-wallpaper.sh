@@ -2,7 +2,9 @@
 # NASA Wallpaper Setter for Linux & WSL
 # Nessun segreto hardcoded, nessun errore soppresso, input validati.
 
-set -euo pipefail
+set -Eeuo pipefail
+
+trap 'rc=$?; if (( BASH_SUBSHELL == 0 )); then log_error "Errore alla riga $LINENO (exit $rc): $BASH_COMMAND"; fi; exit "$rc"' ERR
 
 APOD_ENDPOINT='https://science.nasa.gov/wp-json/wp/v2/apod-basic'
 SEARCH_ENDPOINT='https://images-api.nasa.gov/search'
@@ -37,7 +39,7 @@ die() {
 check_dependencies() {
     local missing=()
     local cmd
-    for cmd in curl jq date; do
+    for cmd in curl jq date mktemp tr; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -68,15 +70,18 @@ validate_year() {
     [[ "$value" =~ ^[0-9]{4}$ ]] && (( 10#$value >= 1800 && 10#$value <= 2200 ))
 }
 
-validate_image_url() {
+validate_https_url() {
     local url="$1"
-    [[ "$url" == https://* ]] || return 1
-    local host
-    host=$(printf '%s' "$url" | jq -r 'capture("^https://(?<h>[^/:]+)").h // empty')
+    local pattern='^https://([A-Za-z0-9._-]+)(:([0-9]+))?([/?#]|$)'
+    [[ "$url" =~ $pattern ]] || return 1
+    local host="${BASH_REMATCH[1]}"
+    local port="${BASH_REMATCH[3]:-443}"
+    [[ "$port" == 443 ]] || return 1
     case "$host" in
-        assets.science.nasa.gov|science.nasa.gov|images-assets.nasa.gov) return 0 ;;
+        apod.nasa.gov|assets.science.nasa.gov|science.nasa.gov|images-assets.nasa.gov|images-api.nasa.gov) ;;
         *) return 1 ;;
     esac
+    [[ "$url" != *"@"* && "$url" != *\\* && "$url" != *" "* && "$url" != *$'\n'* && "$url" != *$'\r'* ]] || return 1
 }
 
 get_today_est() { TZ='America/New_York' date +%Y-%m-%d; }
@@ -92,7 +97,9 @@ date_code() {
 
 http_get() {
     local url="$1"
+    validate_https_url "$url" || return 1
     curl --fail-with-body --silent --show-error --location \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 \
         --max-time "$HTTP_TIMEOUT" "$url" || return 1
 }
 
@@ -170,6 +177,7 @@ set_nasa_image() {
     nasa_id=$(printf '%s' "$item" | jq -r '.data[0].nasa_id // "nasa"')
     collection_url=$(printf '%s' "$item" | jq -r '.href // empty')
     [[ -n "$collection_url" ]] || die 'URL collezione mancante'
+    validate_https_url "$collection_url" || die 'URL collezione non valido o host non autorizzato'
 
     local collection_data image_url
     collection_data=$(http_get "$collection_url") || die 'Recupero collezione non riuscito'
@@ -184,14 +192,19 @@ set_nasa_image() {
 
 set_wallpaper_from_url() {
     local url="$1" name="$2"
-    validate_image_url "$url" || die 'URL immagine non valido o host non autorizzato'
+    validate_https_url "$url" || die 'URL immagine non valido o host non autorizzato'
 
-    local ext='jpg'
-    [[ "$url" == *.png ]] && ext='png'
-    local filename="$TEMP_DIR/${name}-$(date +%s).${ext}"
+    local safe_name
+    safe_name=$(printf '%s' "$name" | tr -cd 'A-Za-z0-9._-') || die 'Pulizia del nome non riuscita'
+    safe_name="${safe_name:0:48}"
+    [[ -n "$safe_name" ]] || safe_name='wallpaper'
+
+    local filename
+    filename=$(mktemp "${TEMP_DIR}/${safe_name}.XXXXXX") || die 'Creazione del file temporaneo non riuscita'
 
     log_info 'Download immagine...'
     if ! curl --fail-with-body --silent --show-error --location \
+        --proto '=https' --proto-redir '=https' --tlsv1.2 \
         --max-time "$DOWNLOAD_TIMEOUT" --output "$filename" "$url"; then
         die 'Download immagine non riuscito'
     fi
@@ -200,7 +213,8 @@ set_wallpaper_from_url() {
     if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null 2>&1; then
         local winpath
         winpath=$(wslpath -w "$filename") || die 'Conversione percorso WSL non riuscita'
-        if powershell.exe -NoProfile -Command "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'; [W]::SystemParametersInfo(0x0014, 0, \"$winpath\", 0x01 | 0x02)" >/dev/null 2>&1; then
+        local ps_script="Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'; if (-not [W]::SystemParametersInfo(0x0014, 0, \$env:WALLPAPER_PATH, 0x03)) { exit 1 }"
+        if WALLPAPER_PATH="$winpath" powershell.exe -NoProfile -NonInteractive -Command "$ps_script" >/dev/null 2>&1; then
             log_success "Sfondo impostato sull host Windows tramite WSL: $filename"
             return 0
         fi
@@ -220,13 +234,15 @@ set_wallpaper_from_url() {
     fi
 
     if [[ "$desktop" == 'KDE' ]] && command -v qdbus >/dev/null 2>&1; then
+        local js_uri
+        js_uri=$(printf '%s' "file://$filename" | jq -Rs @json) || die 'Codifica del percorso KDE non riuscita'
         qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
             var allDesktops = desktops();
             for (i = 0; i < allDesktops.length; i++) {
                 d = allDesktops[i];
                 d.wallpaperPlugin = 'org.kde.image';
                 d.currentConfigGroup = Array('Wallpaper', 'org.kde.image', 'General');
-                d.writeConfig('Image', 'file://$filename');
+                d.writeConfig('Image', $js_uri);
             }" || die 'Impostazione sfondo KDE non riuscita'
         log_success 'Sfondo impostato tramite KDE Plasma'
         return 0
