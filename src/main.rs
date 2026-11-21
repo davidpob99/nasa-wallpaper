@@ -463,7 +463,7 @@ fn args_lunghe(valori: &'static [(&'static str, &'static str, &'static str)]) ->
         .collect()
 }
 
-/// Argomento del fotografo, con alias storico.
+/// Argomento del fotografo: l'alias storico resta disponibile.
 fn arg_fotografo() -> Arg {
     Arg::new("photographer")
         .short('p')
