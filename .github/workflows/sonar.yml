@@ -1,0 +1,46 @@
+name: SonarCloud
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonar:
+    name: Analisi SonarCloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Installa SonarScanner
+        run: |
+          curl -sSLo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.5.0.16571-linux.zip
+          unzip -q /tmp/sonar-scanner.zip -d /tmp/sonar-scanner
+          echo "/tmp/sonar-scanner/sonar-scanner-8.5.0.16571-linux/bin" >> "$GITHUB_PATH"
+
+      - name: Analisi
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=LightYagami28_nasa-wallpaper \
+            -Dsonar.organization=lightyagami28 \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.sources=src \
+            -Dsonar.exclusions=target/**
