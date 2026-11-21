@@ -16,7 +16,6 @@ use colored::*;
 use rand::Rng;
 use reqwest::Url;
 use std::error::Error;
-use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -420,6 +419,7 @@ fn cli() -> Command {
         .arg_required_else_help(true)
         .subcommand(
             Command::new("apod")
+                .alias("-a")
                 .about("Get the APOD (Astronomical Picture of the Day)")
                 .arg(
                     Arg::new("date")
@@ -447,6 +447,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("nasa_image")
+                .alias("-n")
                 .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
                 .arg(
                     Arg::new("query")
@@ -519,18 +520,6 @@ fn cli() -> Command {
         .subcommand(Command::new("status").about("Run a local health check of the configuration"))
 }
 
-/// Normalizza gli argomenti per le shorthand legacy (`-a`, `-n`).
-fn normalize_args(mut args: Vec<OsString>) -> Vec<OsString> {
-    if args.len() >= 2 {
-        if args[1] == OsStr::new("-a") {
-            args[1] = OsString::from("apod");
-        } else if args[1] == OsStr::new("-n") {
-            args[1] = OsString::from("nasa_image");
-        }
-    }
-    args
-}
-
 /// Esegue il controllo di integrità locale (rete, font e URL).
 fn health_check() -> WallpaperResult<()> {
     let client = http_client()?;
@@ -546,9 +535,11 @@ fn mostra_errore(err: &dyn Error) {
 }
 
 /// Punto di ingresso del programma.
+///
+/// clap legge gli argomenti dall'ambiente: il codice dell'applicazione non
+/// accede ad argv e non usa argv[0] per decisioni di sicurezza.
 fn main() -> ExitCode {
-    let args = normalize_args(std::env::args_os().collect());
-    let matches = cli().get_matches_from(args);
+    let matches = cli().get_matches();
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {
