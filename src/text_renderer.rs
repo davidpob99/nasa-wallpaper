@@ -144,24 +144,20 @@ fn spiegazione_a_capo(immagine: &RgbaImage, stile: &StileTesto<'_>, explanation:
 }
 
 /// Disegna la spiegazione, a capo automatico, sotto il titolo.
-fn disegna_spiegazione(
-    immagine: &mut RgbaImage,
-    box_y: u32,
-    stile: &StileTesto<'_>,
-    explanation: &str,
-) {
-    let wrapped = spiegazione_a_capo(immagine, stile, explanation);
-    let y = box_y as i32 + 20 + (stile.font_size * 1.5) as i32;
+fn disegna_spiegazione(img: &mut RgbaImage, y0: u32, st: &StileTesto<'_>, text: &str) {
+    let wrapped = spiegazione_a_capo(img, st, text);
+    let y = y0 as i32 + 20 + (st.font_size * 1.5) as i32;
+    let scala = Scale {
+        x: st.font_size * 0.85,
+        y: st.font_size * 0.85,
+    };
     draw_text_mut(
-        immagine,
+        img,
         Rgba([255, 255, 255, 255]),
         30,
         y,
-        Scale {
-            x: stile.font_size * 0.85,
-            y: stile.font_size * 0.85,
-        },
-        stile.font,
+        scala,
+        st.font,
         &wrapped,
     );
 }

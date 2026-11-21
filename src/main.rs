@@ -434,89 +434,97 @@ fn get_today_est() -> (i32, u32, u32) {
     (est_now.year(), est_now.month(), est_now.day())
 }
 
-/// Costruisce un argomento con forma breve e lunga.
-fn arg_breve(nome: &'static str, short: char, value_name: &'static str, help: &'static str) -> Arg {
-    Arg::new(nome)
-        .short(short)
-        .long(nome)
-        .value_name(value_name)
-        .action(ArgAction::Set)
-        .help(help)
+/// Costruisce più argomenti con forma breve e lunga.
+fn args_brevi(valori: &'static [(&'static str, char, &'static str, &'static str)]) -> Vec<Arg> {
+    valori
+        .iter()
+        .map(|(nome, short, value_name, help)| {
+            Arg::new(*nome)
+                .short(*short)
+                .long(*nome)
+                .value_name(*value_name)
+                .action(ArgAction::Set)
+                .help(*help)
+        })
+        .collect()
 }
 
-/// Costruisce un argomento con sola forma lunga.
-fn arg_lunga(nome: &'static str, value_name: &'static str, help: &'static str) -> Arg {
-    Arg::new(nome)
-        .long(nome)
-        .value_name(value_name)
+/// Costruisce argomenti con sola forma lunga.
+fn args_lunghe(valori: &'static [(&'static str, &'static str, &'static str)]) -> Vec<Arg> {
+    valori
+        .iter()
+        .map(|(nome, value_name, help)| {
+            Arg::new(*nome)
+                .long(*nome)
+                .value_name(*value_name)
+                .action(ArgAction::Set)
+                .help(*help)
+        })
+        .collect()
+}
+
+/// Argomento del fotografo, con alias storico.
+fn arg_fotografo() -> Arg {
+    Arg::new("photographer")
+        .short('p')
+        .long("photographer")
+        .visible_alias("phtographer")
+        .value_name("PHOTOGRAPHER")
         .action(ArgAction::Set)
-        .help(help)
+        .help("The primary photographer’s name")
 }
 
 /// Argomenti di ricerca del sottocomando `nasa_image`.
 fn arghi_ricerca() -> Vec<Arg> {
-    vec![
-        arg_breve(
+    args_brevi(&[
+        (
             "query",
             'q',
             "Q",
             "Free text search terms to compare to all indexed metadata",
         ),
-        arg_breve(
+        (
             "center",
             'c',
             "CENTER",
             "NASA center which published the media",
         ),
-        arg_breve(
+        (
             "location",
             'o',
             "LOCATION",
             "Terms to search for in “Location” fields",
         ),
-        arg_breve("nasa_id", 'i', "NASA_ID", "The media asset’s NASA ID"),
-    ]
-}
-
-/// Argomenti relativi a fotografo e titolo.
-fn arghi_foto() -> Vec<Arg> {
-    vec![
-        arg_breve(
-            "photographer",
-            'p',
-            "PHOTOGRAPHER",
-            "The primary photographer’s name",
-        )
-        .visible_alias("phtographer"),
-        arg_breve(
+        ("nasa_id", 'i', "NASA_ID", "The media asset’s NASA ID"),
+        (
             "title",
             't',
             "TITLE",
             "Terms to search for in “Title” fields",
         ),
-    ]
+    ])
 }
 
 /// Argomenti temporali del sottocomando `nasa_image`.
 fn arghi_anni() -> Vec<Arg> {
-    vec![
-        arg_lunga(
+    args_lunghe(&[
+        (
             "year_start",
             "YEAR_START",
             "The start year for results. Format: YYYY",
         ),
-        arg_lunga(
+        (
             "year_end",
             "YEAR_END",
             "The end year for results. Format: YYYY",
         ),
-    ]
+    ])
 }
 
 /// Costruisce il sottocomando `nasa_image`.
 fn comando_nasa_image() -> Command {
     let mut arghi = arghi_ricerca();
-    arghi.extend(arghi_foto());
+    arghi.push(arg_fotografo());
     arghi.extend(arghi_anni());
     Command::new("nasa_image")
         .alias("-n")
