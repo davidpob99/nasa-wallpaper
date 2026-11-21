@@ -114,46 +114,59 @@ fn scurisci_fascia(immagine: &mut RgbaImage, height: u32) -> u32 {
     box_y
 }
 
-/// Disegna titolo e spiegazione nella fascia scurita.
-fn disegna_testi(
+/// Font e dimensione usati per il testo dell'overlay.
+struct StileTesto<'a> {
+    font: &'a Font<'static>,
+    font_size: f32,
+}
+
+/// Disegna il titolo nella fascia scurita.
+fn disegna_titolo(immagine: &mut RgbaImage, box_y: u32, stile: &StileTesto<'_>, title: &str) {
+    draw_text_mut(
+        immagine,
+        Rgba([255, 255, 255, 255]),
+        30,
+        box_y as i32 + 20,
+        Scale {
+            x: stile.font_size,
+            y: stile.font_size,
+        },
+        stile.font,
+        title,
+    );
+}
+
+/// Disegna la spiegazione, a capo automatico, sotto il titolo.
+fn disegna_spiegazione(
     immagine: &mut RgbaImage,
     box_y: u32,
-    font_size: f32,
-    font: &Font<'static>,
-    title: &str,
+    stile: &StileTesto<'_>,
     explanation: &str,
 ) {
     let chars_per_line =
-        (f64::from(immagine.width()) / f64::from(font_size * 0.52)).max(20.0) as usize;
-    let wrapped_explanation = textwrap::fill(explanation, chars_per_line);
-    let text_color = Rgba([255, 255, 255, 255]);
-    let scale = Scale {
-        x: font_size,
-        y: font_size,
-    };
-
+        (f64::from(immagine.width()) / f64::from(stile.font_size * 0.52)).max(20.0) as usize;
+    let wrapped = textwrap::fill(explanation, chars_per_line);
+    let y = box_y as i32 + 20 + (stile.font_size * 1.5) as i32;
     draw_text_mut(
         immagine,
-        text_color,
+        Rgba([255, 255, 255, 255]),
         30,
-        box_y as i32 + 20,
-        scale,
-        font,
-        title,
-    );
-    let explanation_y = box_y as i32 + 20 + (font_size * 1.5) as i32;
-    draw_text_mut(
-        immagine,
-        text_color,
-        30,
-        explanation_y,
+        y,
         Scale {
-            x: font_size * 0.85,
-            y: font_size * 0.85,
+            x: stile.font_size * 0.85,
+            y: stile.font_size * 0.85,
         },
-        font,
-        &wrapped_explanation,
+        stile.font,
+        &wrapped,
     );
+}
+
+/// Verifica che l'immagine abbia dimensioni non nulle.
+fn dimensioni_valide((width, height): (u32, u32)) -> Result<(u32, u32)> {
+    if width == 0 || height == 0 {
+        bail!("Immagine con dimensioni nulle");
+    }
+    Ok((width, height))
 }
 
 /// Salva l'immagine in un file temporaneo e ne restituisce il percorso.
@@ -180,16 +193,16 @@ pub fn draw_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Resul
 
     let font = find_system_font().context("Caricamento font per overlay non riuscito")?;
     let image = image::load_from_memory(image_bytes).context("Decodifica immagine non riuscita")?;
-    let (width, height) = image.dimensions();
-    if width == 0 || height == 0 {
-        bail!("Immagine con dimensioni nulle");
-    }
-
+    let (width, height) = dimensioni_valide(image.dimensions())?;
     let scale_factor = (f64::from(width) / 1920.0).max(1.0) as f32;
-    let font_size = 22.0 * scale_factor;
+    let stile = StileTesto {
+        font: &font,
+        font_size: 22.0 * scale_factor,
+    };
     let mut rgba_image = image.to_rgba8();
     let box_y = scurisci_fascia(&mut rgba_image, height);
-    disegna_testi(&mut rgba_image, box_y, font_size, &font, title, explanation);
+    disegna_titolo(&mut rgba_image, box_y, &stile, title);
+    disegna_spiegazione(&mut rgba_image, box_y, &stile, explanation);
     salva_overlay(&rgba_image)
 }
 

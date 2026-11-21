@@ -239,6 +239,12 @@ fn http_client() -> WallpaperResult<reqwest::blocking::Client> {
         .build()?)
 }
 
+/// Scarica un URL e interpreta il corpo come JSON.
+fn json_da_url(client: &reqwest::blocking::Client, url: Url) -> WallpaperResult<json::JsonValue> {
+    let testo = client.get(url).send()?.text()?;
+    Ok(json::parse(&testo)?)
+}
+
 /// Verifica che un URL sia HTTPS e appartenga a un host autorizzato.
 ///
 /// Questa validazione impedisce che un campo controllato dall'API remota
@@ -326,8 +332,7 @@ fn conta_risultati(
     parametri: &NasaImageQuery<'_>,
 ) -> WallpaperResult<usize> {
     let url = costruisci_url_ricerca(parametri, None)?;
-    let testo = client.get(url).send()?.text()?;
-    let json = json::parse(&testo)?;
+    let json = json_da_url(client, url)?;
     json["collection"]["metadata"]["total_hits"]
         .as_usize()
         .ok_or("Campo total_hits mancante o non valido".into())
@@ -344,8 +349,7 @@ fn pagina_casuale(
     let mut rng = rand::rng();
     let index_page = rng.random_range(0..page_count) as u32;
     let url = costruisci_url_ricerca(parametri, Some(index_page))?;
-    let testo = client.get(url).send()?.text()?;
-    let json = json::parse(&testo)?;
+    let json = json_da_url(client, url)?;
     let items = &json["collection"]["items"];
     if items.is_empty() {
         return Err("Pagina di risultati vuota".into());
@@ -359,8 +363,7 @@ fn url_asset_collezione(
     url_collezione: &str,
 ) -> WallpaperResult<String> {
     let url_immagine = url_immagine_sicura(url_collezione)?;
-    let testo = client.get(url_immagine).send()?.text()?;
-    let json = json::parse(&testo)?;
+    let json = json_da_url(client, url_immagine)?;
     let asset = json[0].as_str().ok_or("URL dell'asset mancante")?;
     url_immagine_sicura(asset)?;
     Ok(asset.to_owned())
@@ -431,74 +434,74 @@ fn get_today_est() -> (i32, u32, u32) {
     (est_now.year(), est_now.month(), est_now.day())
 }
 
+/// Costruisce un argomento con forma breve e lunga.
+fn arg_breve(nome: &'static str, short: char, value_name: &'static str, help: &'static str) -> Arg {
+    Arg::new(nome)
+        .short(short)
+        .long(nome)
+        .value_name(value_name)
+        .action(ArgAction::Set)
+        .help(help)
+}
+
+/// Costruisce un argomento con sola forma lunga.
+fn arg_lunga(nome: &'static str, value_name: &'static str, help: &'static str) -> Arg {
+    Arg::new(nome)
+        .long(nome)
+        .value_name(value_name)
+        .action(ArgAction::Set)
+        .help(help)
+}
+
 /// Costruisce il sottocomando `nasa_image`.
 fn comando_nasa_image() -> Command {
     Command::new("nasa_image")
         .alias("-n")
         .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
-        .arg(
-            Arg::new("query")
-                .short('q')
-                .long("query")
-                .value_name("Q")
-                .action(ArgAction::Set)
-                .help("Free text search terms to compare to all indexed metadata"),
-        )
-        .arg(
-            Arg::new("center")
-                .short('c')
-                .long("center")
-                .value_name("CENTER")
-                .action(ArgAction::Set)
-                .help("NASA center which published the media"),
-        )
-        .arg(
-            Arg::new("location")
-                .short('o')
-                .long("location")
-                .value_name("LOCATION")
-                .action(ArgAction::Set)
-                .help("Terms to search for in “Location” fields"),
-        )
-        .arg(
-            Arg::new("nasa_id")
-                .short('i')
-                .long("nasa_id")
-                .value_name("NASA_ID")
-                .action(ArgAction::Set)
-                .help("The media asset’s NASA ID"),
-        )
-        .arg(
-            Arg::new("photographer")
-                .short('p')
-                .long("photographer")
-                .visible_alias("phtographer")
-                .value_name("PHOTOGRAPHER")
-                .action(ArgAction::Set)
-                .help("The primary photographer’s name"),
-        )
-        .arg(
-            Arg::new("title")
-                .short('t')
-                .long("title")
-                .value_name("TITLE")
-                .action(ArgAction::Set)
-                .help("Terms to search for in “Title” fields"),
-        )
-        .arg(
-            Arg::new("year_start")
-                .long("year_start")
-                .value_name("YEAR_START")
-                .action(ArgAction::Set)
-                .help("The start year for results. Format: YYYY"),
-        )
-        .arg(
-            Arg::new("year_end")
-                .long("year_end")
-                .value_name("YEAR_END")
-                .action(ArgAction::Set)
-                .help("The end year for results. Format: YYYY"),
-        )
+        .args([
+            arg_breve(
+                "query",
+                'q',
+                "Q",
+                "Free text search terms to compare to all indexed metadata",
+            ),
+            arg_breve(
+                "center",
+                'c',
+                "CENTER",
+                "NASA center which published the media",
+            ),
+            arg_breve(
+                "location",
+                'o',
+                "LOCATION",
+                "Terms to search for in “Location” fields",
+            ),
+            arg_breve("nasa_id", 'i', "NASA_ID", "The media asset’s NASA ID"),
+            arg_breve(
+                "photographer",
+                'p',
+                "PHOTOGRAPHER",
+                "The primary photographer’s name",
+            )
+            .visible_alias("phtographer"),
+            arg_breve(
+                "title",
+                't',
+                "TITLE",
+                "Terms to search for in “Title” fields",
+            ),
+            arg_lunga(
+                "year_start",
+                "YEAR_START",
+                "The start year for results. Format: YYYY",
+            ),
+            arg_lunga(
+                "year_end",
+                "YEAR_END",
+                "The end year for results. Format: YYYY",
+            ),
+        ])
 }
 
 /// Costruisce la definizione della CLI.
