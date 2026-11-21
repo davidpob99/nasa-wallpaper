@@ -1,122 +1,86 @@
 # nasa-wallpaper
+
 ![GitHub Release](https://img.shields.io/github/v/release/davidpob99/nasa-wallpaper)
 ![Crates.io Version](https://img.shields.io/crates/v/nasa-wallpaper)
 ![AUR Version](https://img.shields.io/aur/version/nasa-wallpaper)
 ![GitHub Downloads](https://img.shields.io/github/downloads/davidpob99/nasa-wallpaper/total)
 ![License](https://img.shields.io/github/license/davidpob99/nasa-wallpaper)
 
-A lightweight tool to automatically set your desktop wallpaper with stunning NASA images.
-You can choose images from:
+Strumento leggero che imposta come sfondo del desktop un'immagine NASA. Le sorgenti disponibili sono:
 
-* [APOD (Astronomical Picture of the Day)](https://science.nasa.gov/apod/)
-* [NASA Image Library](https://images.nasa.gov/)
-* [NASA on Unsplash](https://unsplash.com/@nasa)
+- [APOD (Astronomical Picture of the Day)](https://science.nasa.gov/apod/)
+- [NASA Image Library](https://images.nasa.gov/)
+- [NASA su Unsplash](https://unsplash.com/@nasa)
 
 ![Example](https://images-assets.nasa.gov/image/iss040e008244/iss040e008244~small.jpg)
 
+## Piattaforme supportate
 
-## 🌍 Supported Platforms
+- Windows, macOS
+- GNOME, KDE, Cinnamon, Unity, Budgie, XFCE, LXDE, MATE, Deepin
+- i3
 
-* **Windows**
-* **macOS**
-* **GNOME**, **KDE**, **Cinnamon**, **Unity**, **Budgie**, **XFCE**, **LXDE**, **MATE**, **Deepin**
-* **i3**
+## Installazione
 
+- **Crates.io**: `cargo install nasa-wallpaper`
+- **Manualmente**: scarica l'eseguibile dalla pagina [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) e avvialo da terminale.
+- **Arch Linux**: pacchetto [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
 
-## ⚡ Installation
-- **Crates**: `cargo install nasa-wallpaper`
-- **Manual**: download the executable that matches your operating system and architecture from the [Releases](https://github.com/davidpob99/nasa-wallpaper/releases) page or downloa d
-Open a terminal and simply run it.
-- **Arch Linux**: you can install it directly from the [AUR](https://aur.archlinux.org/packages/nasa-wallpaper/).
+## Build dal sorgente
 
-
-## 🔧 Build from Source
-
-Requirements: [Rust](https://www.rust-lang.org/) **2021 edition or newer**.
-
-Clone the repository and run:
+Richiede Rust con edizione 2021 o successiva.
 
 ```bash
 cargo build --release
+cargo test
+cargo clippy --all-targets -- -D warnings
 ```
 
-The compiled binary will be available under `target/release/`.
+Il binario viene creato in `target/release/`.
 
+## Uso
 
-## 🚀 Quick Usage
+```bash
+# APOD di oggi
+nasa-wallpaper apod
 
-* Set today’s APOD as wallpaper:
+# APOD di una data specifica
+nasa-wallpaper apod -d 1999-03-27
 
-  ```bash
-  nasa-wallpaper apod
-  ```
+# Versione a risoluzione ridotta
+nasa-wallpaper apod -l
 
-* Set the APOD for **March 27, 1999**:
+# Immagine casuale dalla libreria NASA
+nasa-wallpaper nasa_image -q "james webb"
 
-  ```bash
-  nasa-wallpaper apod -d 1999-03-27
-  ```
+# Immagine dall'account NASA su Unsplash
+nasa-wallpaper unsplash
 
-* Use a lower resolution version of the APOD image:
+# Verifica locale (client HTTP, font, URL)
+nasa-wallpaper status
 
-  ```bash
-  nasa-wallpaper apod -l
-  ```
+# Testo di licenza
+nasa-wallpaper license
+```
 
-  > APOD data comes from the [APOD Basic API](https://science.nasa.gov/wp-json/wp/v2/apod-basic) on
-  > `science.nasa.gov`, which doesn't need an API key. The old `-k/--key` option is still accepted but ignored.
+I dati APOD provengono dall'endpoint [APOD Basic](https://science.nasa.gov/wp-json/wp/v2/apod-basic), che non richiede chiave API. L'opzione legacy `-k/--key` è ancora accettata ma ignorata e non appare nell'help.
 
-* Set a random image from the NASA Image Library:
+Le shorthand storiche `-a` (apod) e `-n` (nasa_image) restano supportate.
 
-  ```bash
-  nasa-wallpaper nasa_image
-  ```
+## Sicurezza
 
-* Set a random image with the keyword *earth*:
+- Le richieste HTTP hanno un timeout esplicito di 20 secondi.
+- I parametri di ricerca sono codificati tramite URL, senza concatenazione manuale.
+- Prima di impostare lo sfondo, l'URL viene validato: solo HTTPS e host NASA/Unsplash autorizzati.
+- Nessun segreto viene letto, scritto o registrato: la vecchia chiave API non è più necessaria.
+- Gli errori vengono gestiti senza `unwrap`/`expect` su dati esterni e senza stack trace.
 
-  ```bash
-  nasa-wallpaper nasa_image -q earth
-  ```
+Per le segnalazioni di sicurezza vedi [SECURITY.md](SECURITY.md).
 
-* Show help:
+## Licenza
 
-  ```bash
-  nasa-wallpaper help
-  ```
+Apache License 2.0. Vedi [LICENSE](LICENSE) e [NOTICE.md](NOTICE.md).
 
-📖 **Full documentation:** [Wiki – Command Line Help](https://github.com/davidpob99/nasa-wallpaper/wiki/Command%E2%80%90Line-Help)
+## Altri documenti
 
-
-## 🤝 Contributing
-
-Contributions are welcome! 🎉
-
-This project follows the [Gitflow](https://nvie.com/posts/a-successful-git-branching-model/) branching model:
-
-| Branch                | Purpose                                                   | Branches off | Merges into          |
-|-----------------------|-----------------------------------------------------------|--------------|----------------------|
-| `master`              | Production-ready code. Every commit is a tagged release   | —            | —                    |
-| `develop`             | Integration branch for the next release                   | `master`     | —                    |
-| `bugfix/<issue>-<short-description>`  | Fix bugs                                  | `develop`    | `develop`            |
-| `feature/<issue>-<short-description>` | New features                              | `develop`    | `develop`            |
-| `release/<version>`   | Release preparation (version bump, final fixes)           | `develop`    | `master` and `develop` |
-| `hotfix/<issue>-<short-description>`  | Urgent fixes for production               | `master`     | `master` and `develop` |
-
-
-If you’d like to contribute:
-
-1. Fork this repository
-2. Create an issue describing the feature or bug
-3. Create a branch that corresponds to the issue, following the naming conventions above:
-  - Bugs: branch off `develop` as `bugfix/[issue number]-[short description]` (e.g. `feature/50-update-nasa-api-url`)
-  - Features: branch off `develop` as `feature/[issue number]-[short description]` (e.g. `feature/37-automatise-upload-of-versions`)
-  - Hotfixes: branch off `master` as `hotfix/[issue number]-[short description]`
-4. Commit your changes
-5. Push the branch
-6. Open a Pull Request against `develop` (bugfixes, features) or `master` (hotfixes). Please ensure that an issue exists before submitting your contribution as a pull request
-
-> `master` and `develop` are never committed to directly. `release/*` branches are created by the maintainers.
-
-## 📜 License
-
-This project is licensed under the [APACHE 2.0 License](LICENSE).
+[CONTRIBUTING.md](CONTRIBUTING.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [OBSERVABILITY.md](OBSERVABILITY.md), [CITATION.cff](CITATION.cff), [debian/README.md](debian/README.md).

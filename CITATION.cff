@@ -1,7 +1,18 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it."
 title: "nasa-wallpaper"
-date-released: 2026-10-05
+abstract: "Strumento che imposta come sfondo del desktop immagini NASA dall'APOD, dalla NASA Image Library o da Unsplash."
+type: software
+version: 2.1.3
+date-released: "2026-11-21"
+license: "Apache-2.0"
+repository-code: "https://github.com/davidpob99/nasa-wallpaper"
 authors:
   - family-names: Maule
     given-names: Alessandro
+    alias: "Light Yagami"
+keywords:
+  - "Rust"
+  - "NASA"
+  - "wallpaper"
+  - "APOD"
