@@ -1,19 +1,20 @@
 stages:
-  - build
-  - test
-  - deploy
+  - verify
 
-build:
-  stage: build
-  script:
-    - echo "Building..."
+default:
+  image: rust:1.85
+  interruptible: true
 
-test:
-  stage: test
-  script:
-    - echo "Testing..."
+variables:
+  CARGO_TERM_COLOR: "never"
 
-deploy:
-  stage: deploy
+verify:
+  stage: verify
   script:
-    - echo "Deploying..."
+    - rustup component add rustfmt clippy
+    - cargo fmt --check
+    - cargo clippy --all-targets -- -D warnings
+    - cargo test --locked
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
