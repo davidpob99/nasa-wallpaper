@@ -4,8 +4,6 @@
 
 set -Eeuo pipefail
 
-trap 'rc=$?; if (( BASH_SUBSHELL == 0 )); then log_error "Errore alla riga $LINENO (exit $rc): $BASH_COMMAND"; fi; exit "$rc"' ERR
-
 APOD_ENDPOINT='https://science.nasa.gov/wp-json/wp/v2/apod-basic'
 SEARCH_ENDPOINT='https://images-api.nasa.gov/search'
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/nasa-wallpaper"
@@ -35,6 +33,16 @@ die() {
     log_error "$message"
     exit 1
 }
+
+on_error() {
+    local rc="$1" line="$2" cmd="$3"
+    if (( BASH_SUBSHELL == 0 )); then
+        log_error "Errore alla riga $line (exit $rc): $cmd"
+    fi
+    exit "$rc"
+}
+
+trap 'on_error "$?" "$LINENO" "$BASH_COMMAND"' ERR
 
 check_dependencies() {
     local missing=()
