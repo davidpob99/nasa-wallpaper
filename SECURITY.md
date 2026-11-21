@@ -20,3 +20,11 @@ Solo l'ultima versione pubblicata riceve correzioni di sicurezza. Versione corre
 ## Ambito
 
 L'applicazione scarica immagini e modifica lo sfondo del desktop: non espone servizi di rete in ascolto, non gestisce sessioni utente e non memorizza credenziali. Le raccomandazioni OWASP Top 10 2025 applicabili (A03 supply chain, A05 injection, A06 insecure design, A10 exceptional conditions) sono implementate nel codice; le sezioni relative a webapp, LLM e database non sono applicabili.
+
+## HTTPS residuo
+
+Tutte le richieste di rete dell'applicazione usano HTTPS e host autorizzati. I `http://` ancora presenti non sono URL di rete attivi:
+
+- `LICENSE` (due righe): testo originale della licenza Apache 2.0, riferimento legale da non alterare.
+- `src/tests.rs:298`: indirizzo loopback di test (`127.0.0.1:1`), nessuna richiesta esterna.
+- `src/tests.rs:367`: asserzione negativa che verifica il rifiuto di una sorgente immagine `http://`.
