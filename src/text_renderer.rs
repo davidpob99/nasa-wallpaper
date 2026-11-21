@@ -4,7 +4,7 @@
 //! di decodifica immagine viene silenziosamente ignorato.
 
 use anyhow::{anyhow, bail, Context, Result};
-use image::{GenericImageView, Rgba};
+use image::{GenericImageView, Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale};
 use std::path::{Path, PathBuf};
@@ -84,40 +84,24 @@ pub fn find_system_font() -> Result<Font<'static>> {
     }
 }
 
-/// Disegna un overlay scuro con titolo e spiegazione sull'immagine data.
-///
-/// Restituisce il percorso del file temporaneo generato. I dati in ingresso
-/// sono limitati in dimensione per evitare consumi non controllati.
-pub fn draw_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Result<PathBuf> {
+/// Verifica i limiti di dimensione dei dati in ingresso.
+fn valida_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Result<()> {
     if image_bytes.is_empty() || image_bytes.len() > MAX_IMAGE_BYTES {
         bail!("Dimensione immagine non valida");
     }
     if title.chars().count() > MAX_TESTO || explanation.chars().count() > MAX_TESTO {
         bail!("Testo di overlay troppo lungo");
     }
+    Ok(())
+}
 
-    let font = find_system_font().context("Caricamento font per overlay non riuscito")?;
-    let image = image::load_from_memory(image_bytes).context("Decodifica immagine non riuscita")?;
-
-    let (width, height) = image.dimensions();
-    if width == 0 || height == 0 {
-        bail!("Immagine con dimensioni nulle");
-    }
-
-    let scale_factor = (f64::from(width) / 1920.0).max(1.0) as f32;
-    let font_size = 22.0 * scale_factor;
-    let scale = Scale {
-        x: font_size,
-        y: font_size,
-    };
-
+/// Scurisce la fascia inferiore dell'immagine e ne restituisce l'inizio.
+fn scurisci_fascia(immagine: &mut RgbaImage, height: u32) -> u32 {
     let box_height = (f64::from(height) * 0.28) as u32;
     let box_y = height - box_height;
-    let mut rgba_image = image.to_rgba8();
-
     for y in box_y..height {
-        for x in 0..width {
-            let pixel = rgba_image.get_pixel_mut(x, y);
+        for x in 0..immagine.width() {
+            let pixel = immagine.get_pixel_mut(x, y);
             let p = pixel.0;
             pixel.0 = [
                 (f32::from(p[0]) * 0.3) as u8,
@@ -127,42 +111,100 @@ pub fn draw_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Resul
             ];
         }
     }
+    box_y
+}
 
-    let chars_per_line = (f64::from(width) / f64::from(font_size * 0.52)).max(20.0) as usize;
-    let wrapped_explanation = textwrap::fill(explanation, chars_per_line);
-    let text_color = Rgba([255, 255, 255, 255]);
+/// Font e dimensione usati per il testo dell'overlay.
+struct StileTesto<'a> {
+    font: &'a Font<'static>,
+    font_size: f32,
+}
 
+/// Disegna il titolo nella fascia scurita.
+fn disegna_titolo(immagine: &mut RgbaImage, box_y: u32, stile: &StileTesto<'_>, title: &str) {
     draw_text_mut(
-        &mut rgba_image,
-        text_color,
+        immagine,
+        Rgba([255, 255, 255, 255]),
         30,
         box_y as i32 + 20,
-        scale,
-        &font,
+        Scale {
+            x: stile.font_size,
+            y: stile.font_size,
+        },
+        stile.font,
         title,
     );
-    let explanation_y = box_y as i32 + 20 + (font_size * 1.5) as i32;
-    draw_text_mut(
-        &mut rgba_image,
-        text_color,
-        30,
-        explanation_y,
-        Scale {
-            x: font_size * 0.85,
-            y: font_size * 0.85,
-        },
-        &font,
-        &wrapped_explanation,
-    );
+}
 
+/// Adatta la spiegazione alla larghezza dell'immagine.
+fn spiegazione_a_capo(immagine: &RgbaImage, stile: &StileTesto<'_>, explanation: &str) -> String {
+    let chars_per_line =
+        (f64::from(immagine.width()) / f64::from(stile.font_size * 0.52)).max(20.0) as usize;
+    textwrap::fill(explanation, chars_per_line)
+}
+
+/// Disegna la spiegazione, a capo automatico, sotto il titolo.
+fn disegna_spiegazione(img: &mut RgbaImage, y0: u32, st: &StileTesto<'_>, text: &str) {
+    let wrapped = spiegazione_a_capo(img, st, text);
+    let y = y0 as i32 + 20 + (st.font_size * 1.5) as i32;
+    let scala = Scale {
+        x: st.font_size * 0.85,
+        y: st.font_size * 0.85,
+    };
+    draw_text_mut(
+        img,
+        Rgba([255, 255, 255, 255]),
+        30,
+        y,
+        scala,
+        st.font,
+        &wrapped,
+    );
+}
+
+/// Verifica che l'immagine abbia dimensioni non nulle.
+fn dimensioni_valide((width, height): (u32, u32)) -> Result<(u32, u32)> {
+    if width == 0 || height == 0 {
+        bail!("Immagine con dimensioni nulle");
+    }
+    Ok((width, height))
+}
+
+/// Salva l'immagine in un file temporaneo e ne restituisce il percorso.
+fn salva_overlay(immagine: &RgbaImage) -> Result<PathBuf> {
     let mut overlay = nuovo_file_overlay()?;
-    rgba_image
-        .write_to(overlay.as_file_mut(), image::ImageFormat::Jpeg)
-        .context("Salvataggio immagine non riuscito")?;
+    {
+        let file = overlay.as_file_mut();
+        immagine
+            .write_to(file, image::ImageFormat::Jpeg)
+            .context("Salvataggio immagine non riuscito")?;
+    }
     let (_file, percorso) = overlay
         .keep()
         .context("Persistenza del file temporaneo non riuscita")?;
     Ok(percorso)
+}
+
+/// Disegna un overlay scuro con titolo e spiegazione sull'immagine data.
+///
+/// Restituisce il percorso del file temporaneo generato. I dati in ingresso
+/// sono limitati in dimensione per evitare consumi non controllati.
+pub fn draw_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Result<PathBuf> {
+    valida_overlay(image_bytes, title, explanation)?;
+
+    let font = find_system_font().context("Caricamento font per overlay non riuscito")?;
+    let image = image::load_from_memory(image_bytes).context("Decodifica immagine non riuscita")?;
+    let (width, height) = dimensioni_valide(image.dimensions())?;
+    let scale_factor = (f64::from(width) / 1920.0).max(1.0) as f32;
+    let stile = StileTesto {
+        font: &font,
+        font_size: 22.0 * scale_factor,
+    };
+    let mut rgba_image = image.to_rgba8();
+    let box_y = scurisci_fascia(&mut rgba_image, height);
+    disegna_titolo(&mut rgba_image, box_y, &stile, title);
+    disegna_spiegazione(&mut rgba_image, box_y, &stile, explanation);
+    salva_overlay(&rgba_image)
 }
 
 /// Crea il file di overlay con nome casuale e apertura esclusiva.

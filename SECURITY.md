@@ -46,3 +46,34 @@ Tutte le richieste di rete dell'applicazione usano HTTPS e host autorizzati. I `
   `getrandom_package` e `libc` (verificato con
   `cargo tree -e features -i rand@0.7.3`) e non è definito alcun logger.
   Le altre copie nel lockfile (`0.9.5`, `0.10.4`) sono già patched.
+
+## Stato analisi statica (2026-11-21)
+
+Prima degli interventi: 83 finding (4 Error, 6 Warning,
+73 Info). Nessuna soppressione aggiunta.
+
+- `Lizard_ccn-critical` (2) e `nloc-critical` (1): le
+  funzioni `get_nasa_image`, `draw_overlay` e `cli`
+  sono state divise in helper dedicati, mantenendo
+  invariato il comportamento e i 41 test.
+- `Lizard_file-nloc-critical` (1): `Cargo.lock` e'
+  generato da Cargo, non codice scritto a mano. La
+  lunghezza del file non e' un difetto correggibile.
+- `markdownlint_MD013` (46), `MD043` (9), `MD024` (1):
+  lunghezza righe e struttura dei titoli nei documenti.
+- `Lizard_nloc-minor` (8), `ccn-minor` (3),
+  `ccn-medium` (2), `nloc-medium` (2): soglie di
+  complessita' sotto il limite critico.
+- `Trivy_vulnerability_minor` (1): `rand 0.7.3`,
+  descritto nella sezione precedente.
+- `Agentlinter` (4): indicazioni di leggibilita' della
+  documentazione, non difetti di sicurezza.
+
+### Falso positivo del delta sul PR 5
+
+Codacy attribuisce a `arg_fotografo` 110 righe di codice: la
+funzione ne occupa 9. Il valore corrisponde alle 108 righe del
+vecchio `cli()` prima del refactoring (ora 41 righe). La
+motivazione e' riportata nel thread della PR. Nessuna
+soppressione ne' soglia modificata.
+
