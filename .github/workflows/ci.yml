@@ -22,7 +22,7 @@ jobs:
     name: ${{ matrix.platform.os_name }} / rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.platform.os }}
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -118,16 +118,53 @@ jobs:
             tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
           fi
       - name: Upload artifacts
-        if: github.ref == 'refs/tags/test-release'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/tags/test-release'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nasa-wallpaper-${{ matrix.platform.os_name }}
           path: "nasa-wallpaper-*"
+
+  security:
+    name: Controlli di sicurezza
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2
+        with:
+          key: "security"
+      - name: Installa strumenti
+        run: |
+          sudo apt-get update --yes
+          sudo apt-get install --yes shellcheck
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Controllo script shell
+        run: shellcheck debian/nasa-wallpaper.sh
+      - name: Audit dipendenze (cargo-audit)
+        run: cargo audit
+      - name: Policy dipendenze (cargo-deny)
+        run: cargo deny check advisories bans sources
+
+  release:
+    name: Pubblica release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Scarica artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: .
+          merge-multiple: true
       - name: Generate SHA-256
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.platform.os == 'macos-latest'
-        run: shasum -a 256 ${{ matrix.platform.name }}
+        run: shasum -a 256 nasa-wallpaper-*
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836
         with:
           draft: true

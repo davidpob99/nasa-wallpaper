@@ -27,22 +27,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Installa SonarScanner
-        run: |
-          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-            --output /tmp/sonar-scanner.zip \
-            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.5.0.16571-linux.zip
-          unzip -q /tmp/sonar-scanner.zip -d /tmp/sonar-scanner
-          echo "/tmp/sonar-scanner/sonar-scanner-8.5.0.16571-linux/bin" >> "$GITHUB_PATH"
-
       - name: Analisi
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          sonar-scanner \
-            -Dsonar.projectKey=LightYagami28_nasa-wallpaper \
-            -Dsonar.organization=lightyagami28 \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.sources=src \
+        with:
+          args: >
+            -Dsonar.sources=src
             -Dsonar.exclusions=target/**
