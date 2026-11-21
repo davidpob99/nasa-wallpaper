@@ -15,6 +15,7 @@ use clap::{Arg, ArgAction, Command};
 use colored::*;
 use rand::Rng;
 use reqwest::Url;
+use std::env;
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -545,9 +546,20 @@ fn mostra_errore(err: &dyn Error) {
     eprintln!("{}", format!("Error: {err}").red());
 }
 
+/// Raccoglie gli argomenti utente senza mai usare argv[0].
+///
+/// Il nome del programma passato a clap è una costante: argv[0] può contenere
+/// testo arbitrario e non deve essere usato per decisioni di sicurezza.
+/// Vengono letti solo gli argomenti effettivi, a partire dal secondo.
+fn command_line_args() -> Vec<OsString> {
+    let mut args = vec![OsString::from("nasa-wallpaper")];
+    args.extend(env::args_os().skip(1));
+    normalize_args(args)
+}
+
 /// Punto di ingresso del programma.
 fn main() -> ExitCode {
-    let args = normalize_args(std::env::args_os().collect());
+    let args = command_line_args();
     let matches = cli().get_matches_from(args);
 
     match matches.subcommand() {

@@ -326,6 +326,14 @@ fn cli_low_defaults_to_false() {
 }
 
 #[test]
+fn command_line_args_does_not_trust_argv0() {
+    // Il nome del programma nel processo di test è il binario di cargo test:
+    // deve essere sostituito dalla costante, non propagato a clap.
+    let args = command_line_args();
+    assert_eq!(args.first(), Some(&OsString::from("nasa-wallpaper")));
+}
+
+#[test]
 fn cli_still_accepts_legacy_api_key() {
     let args = normalize_args(
         ["nasa-wallpaper", "-a", "-k", "DEMO_KEY"]
