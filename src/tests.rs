@@ -22,8 +22,8 @@ const APOD_FIXTURE: &str = r#"{
 
 const HDURL: &str = "https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/september/Shrimp_Pawel_2048.jpg?w=2048&h=2560&fit=clip&crop=faces%2Cfocalpoint";
 
-fn date(y: i32, m: u32, d: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(y, m, d).expect("data di test valida")
+fn date(y: i16, m: i8, d: i8) -> Date {
+    Date::new(y, m, d).expect("data di test valida")
 }
 
 fn fixture() -> Apod {
