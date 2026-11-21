@@ -1,315 +1,295 @@
 #!/usr/bin/env bash
 # NASA Wallpaper Setter for Linux & WSL
-# Modern, POSIX-compatible helper with multi-desktop & WSL support
+# Nessun segreto hardcoded, nessun errore soppresso, input validati.
 
 set -euo pipefail
 
-# Configuration
-API_KEY="${NASA_API_KEY:-DEMO_KEY}"
+APOD_ENDPOINT='https://science.nasa.gov/wp-json/wp/v2/apod-basic'
+SEARCH_ENDPOINT='https://images-api.nasa.gov/search'
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/nasa-wallpaper"
 TEMP_DIR="${TMPDIR:-/tmp}/nasa-wallpaper"
+HTTP_TIMEOUT=20
+DOWNLOAD_TIMEOUT=30
 
-# Terminal Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+log_info() { printf '[INFO] %s\n' "$1"; }
+log_success() { printf '[SUCCESS] %s\n' "$1"; }
+log_warning() { printf '[WARNING] %s\n' "$1" >&2; }
+log_error() { printf '[ERROR] %s\n' "$1" >&2; }
 
-mkdir -p "$CACHE_DIR" "$TEMP_DIR"
-
-log_info() {
-    printf "${BLUE}[INFO]${NC} %s\n" "$1"
-}
-
-log_success() {
-    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
-}
-
-log_warning() {
-    printf "${YELLOW}[WARNING]${NC} %s\n" "$1"
-}
-
-log_error() {
-    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
-}
+die() { log_error "$1"; exit 1; }
 
 check_dependencies() {
     local missing=()
-    for cmd in curl jq; do
-        if ! command -v "$cmd" &>/dev/null; then
-            missing+=("$cmd")
-        fi
+    local cmd
+    for cmd in curl jq date; do
+        command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
-
     if [[ ${#missing[@]} -gt 0 ]]; then
-        log_error "Missing required dependencies: ${missing[*]}"
-        log_info "Install with: sudo apt install -y ${missing[*]}"
-        exit 1
+        die "Dipendenze mancanti: ${missing[*]}"
+    fi
+    mkdir -p "$CACHE_DIR" "$TEMP_DIR" || die 'Impossibile creare le directory di lavoro'
+}
+
+url_encode() { printf '%s' "$1" | jq -sRr @uri; }
+
+validate_date() {
+    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    if date -d "$1" +%Y-%m-%d >/dev/null 2>&1; then
+        [[ "$(date -d "$1" +%Y-%m-%d)" == "$1" ]]
+    elif date -jf '%Y-%m-%d' "$1" +%Y-%m-%d >/dev/null 2>&1; then
+        [[ "$(date -jf '%Y-%m-%d' "$1" +%Y-%m-%d)" == "$1" ]]
+    else
+        return 1
     fi
 }
 
-get_today_est() {
-    TZ='America/New_York' date +%Y-%m-%d
+validate_year() {
+    [[ "$1" =~ ^[0-9]{4}$ ]] && (( 10#$1 >= 1800 && 10#$1 <= 2200 ))
+}
+
+validate_image_url() {
+    local url="$1"
+    [[ "$url" == https://* ]] || return 1
+    local host
+    host=$(printf '%s' "$url" | jq -r 'capture("^https://(?<h>[^/:]+)").h // empty')
+    case "$host" in
+        assets.science.nasa.gov|science.nasa.gov|images-assets.nasa.gov) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+get_today_est() { TZ='America/New_York' date +%Y-%m-%d; }
+
+date_code() {
+    local data="$1"
+    if date -d "$data" +%y%m%d >/dev/null 2>&1; then
+        date -d "$data" +%y%m%d
+    else
+        date -jf '%Y-%m-%d' "$data" +%y%m%d
+    fi
+}
+
+http_get() {
+    local url="$1"
+    curl --fail-with-body --silent --show-error --location \
+        --max-time "$HTTP_TIMEOUT" "$url" || return 1
 }
 
 set_apod() {
-    local date="${1:-$(get_today_est)}"
-    local use_hd="${2:-true}"
+    local data="${1:-}" low="${2:-false}"
+    [[ -z "$data" ]] && data=$(get_today_est)
+    validate_date "$data" || die "Data non valida: usare YYYY-MM-DD"
 
-    log_info "Fetching APOD for $date..."
-
-    local url="https://science.nasa.gov/wp-json/wp/v2/apod-basic/$(date -d "$date" +%y%m%d 2>/dev/null || date -jf "%Y-%m-%d" "$date" +%y%m%d)"
+    local url="${APOD_ENDPOINT}/$(date_code "$data")"
+    log_info "Recupero APOD per $data..."
     local response
-    response=$(curl -sL --max-time 15 "$url" || true)
-
-    if [[ -z "$response" || "$response" == *"code"* ]]; then
-        url="https://api.nasa.gov/planetary/apod?api_key=$API_KEY&date=$date"
-        response=$(curl -sL --max-time 15 "$url")
-    fi
-
-    if [[ -z "$response" ]]; then
-        log_error "Failed to fetch APOD data"
-        return 1
-    fi
+    response=$(http_get "$url") || die 'Recupero APOD non riuscito'
 
     local media_type title explanation image_url
     media_type=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].media_type else .media_type // empty end')
     title=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].title else .title // empty end')
     explanation=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].explanation else .explanation // empty end')
 
-    if [[ "$media_type" != "image" && -n "$media_type" ]]; then
-        log_warning "APOD for $date is not an image (type: $media_type)"
-        local permalink
-        permalink=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].permalink else .url // empty end')
-        log_info "View online at: $permalink"
+    if [[ -n "$media_type" && "$media_type" != "image" ]]; then
+        log_warning "L'APOD di $data non è un'immagine (tipo: $media_type)"
+        local link
+        link=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].permalink else .url // empty end')
+        log_info "Contenuto originale: $link"
         return 0
     fi
 
-    if [[ "$use_hd" = "true" ]]; then
+    if [[ "$low" == "true" ]]; then
         image_url=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].hdurl // .[0].url else .hdurl // .url end')
+        if [[ "$image_url" == *"/dynamicimage/"* ]]; then
+            image_url="${image_url%%\?*}?w=1024&fit=clip"
+        fi
     else
-        image_url=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].url else .url end')
+        image_url=$(printf '%s' "$response" | jq -r 'if type=="array" then .[0].hdurl // .[0].url else .hdurl // .url end')
     fi
+    [[ -n "$image_url" && "$image_url" != "null" ]] || die 'Nessun URL immagine nell APOD'
 
-    printf "${BLUE}Title:${NC} %s\n" "$title"
-    printf "${BLUE}Date:${NC} %s\n" "$date"
-    printf "${BLUE}Explanation:${NC} %s\n" "$explanation"
-
-    set_wallpaper_from_url "$image_url" "apod-$date"
+    printf '[INFO] Title: %s\n' "$title"
+    printf '[INFO] Date: %s\n' "$data"
+    printf '[INFO] Explanation: %s\n' "$explanation"
+    set_wallpaper_from_url "$image_url" "apod-$data"
 }
 
 set_nasa_image() {
-    local query="${1:-}"
-    local center="${2:-}"
-    local year_start="${3:-1900}"
-    local year_end="${4:-$(date +%Y)}"
+    local query="${1:-}" center="${2:-}" ystart="${3:-1900}" yend="${4:-}"
+    [[ -z "$yend" ]] && yend=$(date +%Y)
+    validate_year "$ystart" || die "Anno inizio non valido: $ystart"
+    validate_year "$yend" || die "Anno fine non valido: $yend"
 
-    log_info "Searching NASA Image Library..."
+    local url="${SEARCH_ENDPOINT}?media_type=image"
+    [[ -n "$query" ]] && url="$url&q=$(url_encode "$query")"
+    [[ -n "$center" ]] && url="$url&center=$(url_encode "$center")"
+    url="$url&year_start=$ystart&year_end=$yend"
 
-    local url="https://images-api.nasa.gov/search?media_type=image"
-    if [[ -n "$query" ]]; then
-        local enc_query
-        enc_query=$(printf '%s' "$query" | jq -sRr @uri)
-        url="$url&q=$enc_query"
-    fi
-    if [[ -n "$center" ]]; then
-        url="$url&center=$center"
-    fi
-    url="$url&year_start=$year_start&year_end=$year_end"
-
+    log_info 'Ricerca nella NASA Image Library...'
     local response total_hits
-    response=$(curl -sL --max-time 15 "$url")
+    response=$(http_get "$url") || die 'Ricerca non riuscita'
     total_hits=$(printf '%s' "$response" | jq -r '.collection.metadata.total_hits // 0')
+    (( total_hits > 0 )) || die 'Nessun risultato per i criteri richiesti'
 
-    if [[ "$total_hits" -le 0 ]]; then
-        log_error "No images found for query: $query"
-        return 1
-    fi
-
-    log_info "Found $total_hits results"
-
-    local max_page=$((total_hits / 100))
-    [[ $max_page -gt 100 ]] && max_page=100
-    local random_page=$((RANDOM % (max_page + 1) + 1))
-
+    local pages=$(( (total_hits + 99) / 100 ))
+    (( pages > 1 )) || pages=1
+    local page=$(( RANDOM % pages ))
     local page_response
-    page_response=$(curl -sL --max-time 15 "$url&page=$random_page")
+    page_response=$(http_get "$url&page=$page") || die 'Recupero pagina non riuscito'
 
-    local items_count random_index
+    local items_count
     items_count=$(printf '%s' "$page_response" | jq '.collection.items | length')
-    if [[ "$items_count" -le 0 ]]; then
-        log_error "No items retrieved from page $random_page"
-        return 1
-    fi
-    random_index=$((RANDOM % items_count))
+    (( items_count > 0 )) || die "Pagina $page vuota"
+    local index=$(( RANDOM % items_count ))
 
     local item title description nasa_id collection_url
-    item=$(printf '%s' "$page_response" | jq ".collection.items[$random_index]")
+    item=$(printf '%s' "$page_response" | jq -c ".collection.items[$index]")
     title=$(printf '%s' "$item" | jq -r '.data[0].title // "NASA Image"')
     description=$(printf '%s' "$item" | jq -r '.data[0].description // ""')
     nasa_id=$(printf '%s' "$item" | jq -r '.data[0].nasa_id // "nasa"')
-    collection_url=$(printf '%s' "$item" | jq -r '.href')
+    collection_url=$(printf '%s' "$item" | jq -r '.href // empty')
+    [[ -n "$collection_url" ]] || die 'URL collezione mancante'
 
     local collection_data image_url
-    collection_data=$(curl -sL --max-time 15 "$collection_url")
+    collection_data=$(http_get "$collection_url") || die 'Recupero collezione non riuscito'
     image_url=$(printf '%s' "$collection_data" | jq -r '.[0] // empty')
+    [[ -n "$image_url" ]] || die 'URL immagine mancante'
 
-    if [[ -z "$image_url" ]]; then
-        log_error "Failed to retrieve direct image URL"
-        return 1
-    fi
-
-    printf "${BLUE}Title:${NC} %s\n" "$title"
-    printf "${BLUE}NASA ID:${NC} %s\n" "$nasa_id"
-    printf "${BLUE}Description:${NC} %s\n" "$description"
-
+    printf '[INFO] Title: %s\n' "$title"
+    printf '[INFO] NASA ID: %s\n' "$nasa_id"
+    printf '[INFO] Description: %s\n' "$description"
     set_wallpaper_from_url "$image_url" "nasa-$nasa_id"
 }
 
 set_wallpaper_from_url() {
-    local url="$1"
-    local name="$2"
+    local url="$1" name="$2"
+    validate_image_url "$url" || die 'URL immagine non valido o host non autorizzato'
 
-    log_info "Downloading wallpaper..."
-
-    local ext="jpg"
-    [[ "$url" =~ \.png$ ]] && ext="png"
-
+    local ext='jpg'
+    [[ "$url" == *.png ]] && ext='png'
     local filename="$TEMP_DIR/${name}-$(date +%s).${ext}"
 
-    if ! curl -sL --max-time 30 -o "$filename" "$url"; then
-        log_error "Failed to download image from $url"
-        return 1
+    log_info 'Download immagine...'
+    if ! curl --fail-with-body --silent --show-error --location \
+        --max-time "$DOWNLOAD_TIMEOUT" --output "$filename" "$url"; then
+        die 'Download immagine non riuscito'
     fi
+    [[ -s "$filename" ]] || die 'File immagine vuoto'
 
-    log_info "Setting wallpaper..."
-
-    # 1. WSL integration: set Windows host desktop background directly
-    if grep -qi "microsoft" /proc/version 2>/dev/null && command -v powershell.exe &>/dev/null; then
+    if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null 2>&1; then
         local winpath
-        winpath=$(wslpath -w "$filename")
-        if powershell.exe -NoProfile -Command "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'; [W]::SystemParametersInfo(0x0014, 0, \"$winpath\", 0x01 | 0x02)" &>/dev/null; then
-            log_success "Wallpaper set successfully on Windows host via WSL!"
-            log_info "Image saved to: $filename"
+        winpath=$(wslpath -w "$filename") || die 'Conversione percorso WSL non riuscita'
+        if powershell.exe -NoProfile -Command "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni); }'; [W]::SystemParametersInfo(0x0014, 0, \"$winpath\", 0x01 | 0x02)" >/dev/null 2>&1; then
+            log_success "Sfondo impostato sull host Windows tramite WSL: $filename"
             return 0
         fi
+        die 'Impostazione sfondo Windows non riuscita'
     fi
 
-    # 2. GNOME / Budgie / Cinnamon
-    if [[ -n "${GNOME_DESKTOP_SESSION_ID:-}" ]] || [[ "${XDG_CURRENT_DESKTOP:-}" =~ (GNOME|Budgie|Cinnamon) ]]; then
-        gsettings set org.gnome.desktop.background picture-uri "file://$filename" 2>/dev/null || true
-        gsettings set org.gnome.desktop.background picture-uri-dark "file://$filename" 2>/dev/null || true
-        log_success "Wallpaper set via GNOME settings"
+    local desktop="${XDG_CURRENT_DESKTOP:-}"
+    if [[ -n "${GNOME_DESKTOP_SESSION_ID:-}" || "$desktop" =~ (GNOME|Budgie|Cinnamon) ]]; then
+        if ! gsettings set org.gnome.desktop.background picture-uri "file://$filename"; then
+            die 'Impostazione sfondo GNOME non riuscita'
+        fi
+        if ! gsettings set org.gnome.desktop.background picture-uri-dark "file://$filename"; then
+            die 'Impostazione sfondo GNOME (tema scuro) non riuscita'
+        fi
+        log_success 'Sfondo impostato tramite GNOME'
         return 0
     fi
 
-    # 3. KDE Plasma
-    if [[ "${XDG_CURRENT_DESKTOP:-}" = "KDE" ]] && command -v qdbus &>/dev/null; then
+    if [[ "$desktop" == 'KDE' ]] && command -v qdbus >/dev/null 2>&1; then
         qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
             var allDesktops = desktops();
-            for (i=0;i<allDesktops.length;i++) {
+            for (i = 0; i < allDesktops.length; i++) {
                 d = allDesktops[i];
                 d.wallpaperPlugin = 'org.kde.image';
                 d.currentConfigGroup = Array('Wallpaper', 'org.kde.image', 'General');
                 d.writeConfig('Image', 'file://$filename');
-            }"
-        log_success "Wallpaper set via KDE Plasma"
+            }" || die 'Impostazione sfondo KDE non riuscita'
+        log_success 'Sfondo impostato tramite KDE Plasma'
         return 0
     fi
 
-    # 4. XFCE
-    if [[ "${XDG_CURRENT_DESKTOP:-}" = "XFCE" ]] && command -v xfconf-query &>/dev/null; then
-        xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "$filename"
-        log_success "Wallpaper set via XFCE"
+    if [[ "$desktop" == 'XFCE' ]] && command -v xfconf-query >/dev/null 2>&1; then
+        xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s "$filename" \
+            || die 'Impostazione sfondo XFCE non riuscita'
+        log_success 'Sfondo impostato tramite XFCE'
         return 0
     fi
 
-    # 5. Wayland / Sway / Hyprland
-    if command -v swaybg &>/dev/null; then
-        pkill swaybg || true
-        swaybg -i "$filename" -m fill &
-        log_success "Wallpaper set via swaybg"
+    if command -v swaybg >/dev/null 2>&1; then
+        pkill swaybg || log_warning 'Nessun processo swaybg da terminare'
+        swaybg -i "$filename" -m fill || die 'Impostazione sfondo swaybg non riuscita'
+        log_success 'Sfondo impostato tramite swaybg'
         return 0
     fi
 
-    if command -v feh &>/dev/null; then
-        feh --bg-scale "$filename"
-        log_success "Wallpaper set via feh"
+    if command -v feh >/dev/null 2>&1; then
+        feh --bg-scale "$filename" || die 'Impostazione sfondo feh non riuscita'
+        log_success 'Sfondo impostato tramite feh'
         return 0
     fi
 
-    log_warning "Could not detect active desktop environment. Image downloaded to: $filename"
-    return 0
+    die "Desktop non rilevato. Immagine salvata in: $filename"
 }
 
 show_help() {
-    cat << EOF
+    cat <<'EOF'
 NASA Wallpaper Setter for Linux & WSL
 
-USAGE:
-    ./nasa-wallpaper.sh <COMMAND> [OPTIONS]
+USO:
+    ./nasa-wallpaper.sh <comando> [opzioni]
 
-COMMANDS:
-    apod [OPTIONS]              Get Astronomy Picture of the Day
-    nasa_image [OPTIONS]        Get random image from NASA Image Library
-    help                        Show this help message
+COMANDI:
+    apod [-d DATA] [-l]     Imposta l'APOD di una data (predefinita: oggi)
+    nasa_image [opzioni]    Immagine casuale dalla libreria NASA
+    help                    Mostra questo messaggio
 
-APOD OPTIONS:
-    -d, --date <DATE>          Date in YYYY-MM-DD format (default: today)
-    -l, --low                  Use lower resolution image
+OPZIONI APOD:
+    -d, --date DATA         Data YYYY-MM-DD
+    -l, --low               Immagine a bassa risoluzione
 
-NASA IMAGE OPTIONS:
-    -q, --query <QUERY>        Search terms
-    -c, --center <CENTER>      NASA center (e.g. JPL, GSFC, KSC)
-    --year-start <YEAR>        Start year (default: 1900)
-    --year-end <YEAR>          End year (default: current year)
-
-EXAMPLES:
-    ./nasa-wallpaper.sh apod
-    ./nasa-wallpaper.sh apod -d 2024-07-20
-    ./nasa-wallpaper.sh nasa_image -q "james webb"
+OPZIONI NASA IMAGE:
+    -q, --query TESTO       Termini di ricerca
+    -c, --center CENTRO     Centro NASA (es. JPL, GSFC)
+    --year-start ANNO       Anno inizio (1800-2200)
+    --year-end ANNO         Anno fine (1800-2200)
 EOF
 }
 
 main() {
     check_dependencies
     local cmd="${1:-help}"
-    shift || true
+    if (( $# > 0 )); then shift; fi
 
     case "$cmd" in
         apod)
-            local date="" low="false"
-            while [[ $# -gt 0 ]]; do
+            local data='' low='false'
+            while (( $# > 0 )); do
                 case "$1" in
-                    -d|--date) date="$2"; shift 2 ;;
-                    -l|--low) low="true"; shift ;;
-                    *) shift ;;
+                    -d|--date) (( $# >= 2 )) || die 'Valore mancante per --date'; data="$2"; shift 2 ;;
+                    -l|--low) low='true'; shift ;;
+                    *) die "Opzione sconosciuta: $1" ;;
                 esac
             done
-            set_apod "$date" "$low"
+            set_apod "$data" "$low"
             ;;
         nasa_image|nasa-image)
-            local q="" center="" ystart="1900" yend=""
-            while [[ $# -gt 0 ]]; do
+            local q='' center='' ystart='1900' yend=''
+            while (( $# > 0 )); do
                 case "$1" in
-                    -q|--query) q="$2"; shift 2 ;;
-                    -c|--center) center="$2"; shift 2 ;;
-                    --year-start) ystart="$2"; shift 2 ;;
-                    --year-end) yend="$2"; shift 2 ;;
-                    *) shift ;;
+                    -q|--query) (( $# >= 2 )) || die 'Valore mancante per --query'; q="$2"; shift 2 ;;
+                    -c|--center) (( $# >= 2 )) || die 'Valore mancante per --center'; center="$2"; shift 2 ;;
+                    --year-start) (( $# >= 2 )) || die 'Valore mancante per --year-start'; ystart="$2"; shift 2 ;;
+                    --year-end) (( $# >= 2 )) || die 'Valore mancante per --year-end'; yend="$2"; shift 2 ;;
+                    *) die "Opzione sconosciuta: $1" ;;
                 esac
             done
             set_nasa_image "$q" "$center" "$ystart" "$yend"
             ;;
-        help|--help|-h)
-            show_help
-            ;;
-        *)
-            log_error "Unknown command: $cmd"
-            show_help
-            exit 1
-            ;;
+        help|--help|-h) show_help ;;
+        *) die "Comando sconosciuto: $cmd" ;;
     esac
 }
 

@@ -1,36 +1,42 @@
-# NASA Wallpaper Helper for Debian / Linux / WSL
+# NASA Wallpaper Helper per Debian / Linux / WSL
 
-A lightweight Bash script to download and set NASA wallpapers on Linux desktop environments and Windows Subsystem for Linux (WSL).
+Script Bash che scarica e imposta come sfondo immagini NASA sui desktop Linux e su WSL. Non usa chiavi API: legge l'endpoint APOD Basic di `science.nasa.gov`.
 
-## Requirements
+## Requisiti
 
-- `bash` (v4+)
+- `bash` 4 o successivo
 - `curl`
 - `jq`
 
-Install requirements on Debian/Ubuntu/WSL:
 ```bash
 sudo apt update && sudo apt install -y curl jq
 ```
 
-## Supported Desktops & Environments
+## Ambienti supportati
 
-- **WSL (Windows Subsystem for Linux)**: Automatically detects WSL and sets the host Windows desktop wallpaper via Windows PowerShell interop.
-- **GNOME / Budgie / Cinnamon**: via `gsettings`
-- **KDE Plasma**: via `qdbus`
-- **XFCE**: via `xfconf-query`
-- **Wayland (Sway / Hyprland)**: via `swaybg`
-- **Generic X11**: via `feh`
+- **WSL**: rileva l'ambiente e imposta lo sfondo dell'host Windows tramite PowerShell interop.
+- **GNOME / Budgie / Cinnamon**: tramite `gsettings`.
+- **KDE Plasma**: tramite `qdbus`.
+- **XFCE**: tramite `xfconf-query`.
+- **Wayland (Sway / Hyprland)**: tramite `swaybg`.
+- **X11 generico**: tramite `feh`.
 
-## Usage
+## Uso
 
 ```bash
-# Set today's APOD
 ./nasa-wallpaper.sh apod
-
-# Set APOD for a specific date
 ./nasa-wallpaper.sh apod -d 2024-07-20
-
-# Search NASA Image and Video Library
-./nasa-wallpaper.sh nasa_image -q "james webb"
+./nasa-wallpaper.sh apod --low
+./nasa-wallpaper.sh nasa_image -q "james webb" --year-start 2020
+./nasa-wallpaper.sh help
 ```
+
+## Sicurezza
+
+- Tutte le richieste hanno un timeout esplicito.
+- I parametri di ricerca sono codificati con `jq @uri`.
+- Gli URL delle immagini vengono validati: solo HTTPS e host NASA autorizzati.
+- Nessun errore viene soppresso: le richieste fallite terminano con codice non nullo.
+- Nessun segreto o chiave API è presente nello script.
+
+Verifica sintassi: `bash -n nasa-wallpaper.sh`.
