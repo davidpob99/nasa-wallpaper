@@ -453,55 +453,75 @@ fn arg_lunga(nome: &'static str, value_name: &'static str, help: &'static str) -
         .help(help)
 }
 
+/// Argomenti di ricerca del sottocomando `nasa_image`.
+fn arghi_ricerca() -> Vec<Arg> {
+    vec![
+        arg_breve(
+            "query",
+            'q',
+            "Q",
+            "Free text search terms to compare to all indexed metadata",
+        ),
+        arg_breve(
+            "center",
+            'c',
+            "CENTER",
+            "NASA center which published the media",
+        ),
+        arg_breve(
+            "location",
+            'o',
+            "LOCATION",
+            "Terms to search for in “Location” fields",
+        ),
+        arg_breve("nasa_id", 'i', "NASA_ID", "The media asset’s NASA ID"),
+    ]
+}
+
+/// Argomenti relativi a fotografo e titolo.
+fn arghi_foto() -> Vec<Arg> {
+    vec![
+        arg_breve(
+            "photographer",
+            'p',
+            "PHOTOGRAPHER",
+            "The primary photographer’s name",
+        )
+        .visible_alias("phtographer"),
+        arg_breve(
+            "title",
+            't',
+            "TITLE",
+            "Terms to search for in “Title” fields",
+        ),
+    ]
+}
+
+/// Argomenti temporali del sottocomando `nasa_image`.
+fn arghi_anni() -> Vec<Arg> {
+    vec![
+        arg_lunga(
+            "year_start",
+            "YEAR_START",
+            "The start year for results. Format: YYYY",
+        ),
+        arg_lunga(
+            "year_end",
+            "YEAR_END",
+            "The end year for results. Format: YYYY",
+        ),
+    ]
+}
+
 /// Costruisce il sottocomando `nasa_image`.
 fn comando_nasa_image() -> Command {
+    let mut arghi = arghi_ricerca();
+    arghi.extend(arghi_foto());
+    arghi.extend(arghi_anni());
     Command::new("nasa_image")
         .alias("-n")
         .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
-        .args([
-            arg_breve(
-                "query",
-                'q',
-                "Q",
-                "Free text search terms to compare to all indexed metadata",
-            ),
-            arg_breve(
-                "center",
-                'c',
-                "CENTER",
-                "NASA center which published the media",
-            ),
-            arg_breve(
-                "location",
-                'o',
-                "LOCATION",
-                "Terms to search for in “Location” fields",
-            ),
-            arg_breve("nasa_id", 'i', "NASA_ID", "The media asset’s NASA ID"),
-            arg_breve(
-                "photographer",
-                'p',
-                "PHOTOGRAPHER",
-                "The primary photographer’s name",
-            )
-            .visible_alias("phtographer"),
-            arg_breve(
-                "title",
-                't',
-                "TITLE",
-                "Terms to search for in “Title” fields",
-            ),
-            arg_lunga(
-                "year_start",
-                "YEAR_START",
-                "The start year for results. Format: YYYY",
-            ),
-            arg_lunga(
-                "year_end",
-                "YEAR_END",
-                "The end year for results. Format: YYYY",
-            ),
-        ])
+        .args(arghi)
 }
 
 /// Costruisce la definizione della CLI.

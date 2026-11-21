@@ -136,6 +136,13 @@ fn disegna_titolo(immagine: &mut RgbaImage, box_y: u32, stile: &StileTesto<'_>, 
     );
 }
 
+/// Adatta la spiegazione alla larghezza dell'immagine.
+fn spiegazione_a_capo(immagine: &RgbaImage, stile: &StileTesto<'_>, explanation: &str) -> String {
+    let chars_per_line =
+        (f64::from(immagine.width()) / f64::from(stile.font_size * 0.52)).max(20.0) as usize;
+    textwrap::fill(explanation, chars_per_line)
+}
+
 /// Disegna la spiegazione, a capo automatico, sotto il titolo.
 fn disegna_spiegazione(
     immagine: &mut RgbaImage,
@@ -143,9 +150,7 @@ fn disegna_spiegazione(
     stile: &StileTesto<'_>,
     explanation: &str,
 ) {
-    let chars_per_line =
-        (f64::from(immagine.width()) / f64::from(stile.font_size * 0.52)).max(20.0) as usize;
-    let wrapped = textwrap::fill(explanation, chars_per_line);
+    let wrapped = spiegazione_a_capo(immagine, stile, explanation);
     let y = box_y as i32 + 20 + (stile.font_size * 1.5) as i32;
     draw_text_mut(
         immagine,
