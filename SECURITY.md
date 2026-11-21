@@ -2,7 +2,7 @@
 
 ## Segnalare una vulnerabilità
 
-Non aprire una issue pubblica. Scrivi a **maule2703@gmail.com** con descrizione, passi di riproduzione e impatto stimato. Non includere segreti o dati personali nella segnalazione.
+Non aprire una issue pubblica. Scrivi a **@LightYagami28** con descrizione, passi di riproduzione e impatto stimato. Non includere segreti o dati personali nella segnalazione.
 
 ## Versioni supportate
 
@@ -28,3 +28,7 @@ Tutte le richieste di rete dell'applicazione usano HTTPS e host autorizzati. I `
 - `LICENSE` (due righe): testo originale della licenza Apache 2.0, riferimento legale da non alterare.
 - `src/tests.rs:298`: indirizzo loopback di test (`127.0.0.1:1`), nessuna richiesta esterna.
 - `src/tests.rs:367`: asserzione negativa che verifica il rifiuto di una sorgente immagine `http://`.
+
+## Dipendenze senza fix compatibile
+
+- **`rand 0.7.3`** (RUSTSEC-2026-0097, bassa): è presente solo come dipendenza transitiva di `imageproc 0.23.1`, che richiede `rand ^0.7.3`. La correzione upstream esiste solo nelle serie `0.8.6+`, `0.9.3+` e `0.10.1+`; per raggiungerla servirebbe aggiornare `imageproc` (e `image`) e migrare il rendering testuale da `rusttype` ad `ab_glyph`, una modifica dedicata non eseguibile senza rischio di regressioni visive. L'esposizione è nulla: il difetto richiede le feature `log` e `thread_rng` e un logger personalizzato che chiami `rand::rng()`. In questo progetto `rand 0.7.3` espone solo `alloc`, `std`, `default`, `getrandom`, `getrandom_package` e `libc` (verificato con `cargo tree -e features -i rand@0.7.3`) e non è definito alcun logger. Le altre copie nel lockfile (`0.9.5`, `0.10.4`) sono già patched.

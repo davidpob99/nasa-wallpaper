@@ -20,7 +20,7 @@ Ci impegniamo a rendere la partecipazione un'esperienza libera da molestie per t
 
 ## Ambito e applicazione
 
-Il codice si applica a tutti gli spazi del progetto e ai rappresentanti ufficiali. Le segnalazioni vanno inviate a **maule2703@gmail.com**: saranno esaminate prontamente ed equamente, nel rispetto della privacy di chi segnala.
+Il codice si applica a tutti gli spazi del progetto e ai rappresentanti ufficiali. Le segnalazioni vanno inviate a **@LightYagami28**: saranno esaminate prontamente ed equamente, nel rispetto della privacy di chi segnala.
 
 Le conseguenze previste, in ordine di gravità, sono: correzione privata, avviso, sospensione temporanea, sospensione definitiva.
 
