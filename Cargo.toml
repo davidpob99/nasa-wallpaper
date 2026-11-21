@@ -18,9 +18,9 @@ chrono = "0.4.44"
 chrono-tz = "0.10.4"
 json = "0.12.4"
 rand = "0.9.2"
-image = { version = "0.24", default-features = false, features = ["jpeg", "png"] }
-imageproc = { version = "0.23", default-features = false }
-rusttype = { version = "0.9", default-features = false }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+imageproc = { version = "0.24", default-features = false }
+ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
 textwrap = "0.16"
 anyhow = "1.0"
 tempfile = "3"

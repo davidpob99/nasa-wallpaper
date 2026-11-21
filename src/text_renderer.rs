@@ -6,7 +6,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use image::{GenericImageView, Rgba, RgbaImage};
 use imageproc::drawing::draw_text_mut;
-use rusttype::{Font, Scale};
+use ab_glyph::FontVec;
 use std::path::{Path, PathBuf};
 use tempfile::{Builder, NamedTempFile};
 
@@ -16,11 +16,11 @@ const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_TESTO: usize = 8_192;
 
 /// Carica un font TTF da percorso esplicito, con errori contestualizzati.
-fn carica_font(path: &Path) -> Result<Font<'static>> {
+fn carica_font(path: &Path) -> Result<FontVec> {
     let data = std::fs::read(path)
         .with_context(|| format!("Impossibile leggere il font {}", path.display()))?;
-    let font = Font::try_from_vec(data)
-        .ok_or_else(|| anyhow!("Font TTF non valido: {}", path.display()))?;
+    let font = FontVec::try_from_vec(data)
+        .map_err(|_| anyhow!("Font TTF non valido: {}", path.display()))?;
     Ok(font)
 }
 
@@ -28,7 +28,7 @@ fn carica_font(path: &Path) -> Result<Font<'static>> {
 ///
 /// La variabile `NASA_WALLPAPER_FONT`, se impostata, ha priorità: un suo
 /// valore non valido è un errore esplicito e non viene ignorato.
-pub fn find_system_font() -> Result<Font<'static>> {
+pub fn find_system_font() -> Result<FontVec> {
     if let Some(font_path) = std::env::var_os("NASA_WALLPAPER_FONT") {
         let percorso = PathBuf::from(font_path);
         return carica_font(&percorso)
@@ -116,7 +116,7 @@ fn scurisci_fascia(immagine: &mut RgbaImage, height: u32) -> u32 {
 
 /// Font e dimensione usati per il testo dell'overlay.
 struct StileTesto<'a> {
-    font: &'a Font<'static>,
+    font: &'a FontVec,
     font_size: f32,
 }
 
@@ -127,10 +127,7 @@ fn disegna_titolo(immagine: &mut RgbaImage, box_y: u32, stile: &StileTesto<'_>, 
         Rgba([255, 255, 255, 255]),
         30,
         box_y as i32 + 20,
-        Scale {
-            x: stile.font_size,
-            y: stile.font_size,
-        },
+        stile.font_size,
         stile.font,
         title,
     );
@@ -147,10 +144,7 @@ fn spiegazione_a_capo(immagine: &RgbaImage, stile: &StileTesto<'_>, explanation:
 fn disegna_spiegazione(img: &mut RgbaImage, y0: u32, st: &StileTesto<'_>, text: &str) {
     let wrapped = spiegazione_a_capo(img, st, text);
     let y = y0 as i32 + 20 + (st.font_size * 1.5) as i32;
-    let scala = Scale {
-        x: st.font_size * 0.85,
-        y: st.font_size * 0.85,
-    };
+    let scala = st.font_size * 0.85;
     draw_text_mut(
         img,
         Rgba([255, 255, 255, 255]),
