@@ -11,8 +11,8 @@ pub mod text_renderer;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use chrono_tz::US::Eastern;
-use clap::{Arg, ArgAction, Command};
-use colored::*;
+use clap::{Arg, ArgAction, ArgMatches, Command};
+use colored::Colorize;
 use rand::Rng;
 use reqwest::Url;
 use std::error::Error;
@@ -538,138 +538,167 @@ fn mostra_errore(err: &dyn Error) {
 ///
 /// clap legge gli argomenti dall'ambiente: il codice dell'applicazione non
 /// accede ad argv e non usa argv[0] per decisioni di sicurezza.
-fn main() -> ExitCode {
-    let matches = cli().get_matches();
-
-    match matches.subcommand() {
-        Some(("apod", sub_matches)) => {
-            let date = match sub_matches.get_one::<String>("date") {
-                Some(date) => match parse_apod_date(date) {
-                    Ok(date) => date,
-                    Err(err) => {
-                        eprintln!(
-                            "{}",
-                            format!("Error: invalid date ({err}). Use YYYY-MM-DD").red()
-                        );
-                        return ExitCode::from(2);
-                    }
-                },
-                None => {
-                    let (year, month, day) = get_today_est();
-                    match NaiveDate::from_ymd_opt(year, month, day) {
-                        Some(date) => date,
-                        None => {
-                            eprintln!("{}", "Error: data Eastern non valida".red());
-                            return ExitCode::FAILURE;
-                        }
-                    }
-                }
-            };
-            if sub_matches.get_one::<String>("key").is_some() {
-                println!(
-                    "{}",
-                    "Warning: the APOD API no longer requires an API key. The --key option is ignored."
-                        .yellow()
-                );
-            }
-            let low = sub_matches.get_flag("low");
-
-            let apod = match get_apod(APOD_API_URL, date) {
-                Ok(apod) => apod,
-                Err(err) => {
-                    mostra_errore(err.as_ref());
-                    return ExitCode::FAILURE;
-                }
-            };
-            println!("{apod}");
-            if apod.media_type != "image" {
-                println!(
-                    "{} {}",
-                    "The date you have chosen for the APOD has no image. See the original content in:"
-                        .yellow(),
-                    apod.url.yellow()
-                );
-                return ExitCode::SUCCESS;
-            }
-            println!("{}", MSG_CHANGING.yellow());
-            if let Err(err) = set_wallpaper(&apod, low) {
-                mostra_errore(err.as_ref());
-                return ExitCode::FAILURE;
-            }
-            println!("{}", MSG_DONE.green());
-        }
-        Some(("unsplash", _)) => {
-            if let Err(err) = url_immagine_sicura(URL_UNSPLASH) {
-                mostra_errore(err.as_ref());
-                return ExitCode::FAILURE;
-            }
-            println!("{}", MSG_CHANGING.yellow());
-            if let Err(err) = wallpaper::set_from_url(URL_UNSPLASH) {
-                mostra_errore(&err);
-                return ExitCode::FAILURE;
-            }
-            println!("{}", MSG_DONE.green());
-        }
-        Some(("nasa_image", sub_matches)) => {
-            let valore = |nome: &str| {
-                sub_matches
-                    .get_one::<String>(nome)
-                    .map(String::as_str)
-                    .unwrap_or("")
-            };
-            let (est_year, _, _) = get_today_est();
-            let anno_corrente = est_year.to_string();
-            let parametri = NasaImageQuery {
-                q: valore("query"),
-                center: valore("center"),
-                location: valore("location"),
-                nasa_id: valore("nasa_id"),
-                photographer: valore("photographer"),
-                title: valore("title"),
-                year_start: {
-                    let v = valore("year_start");
-                    if v.is_empty() {
-                        "1900"
-                    } else {
-                        v
-                    }
-                },
-                year_end: {
-                    let v = valore("year_end");
-                    if v.is_empty() {
-                        &anno_corrente
-                    } else {
-                        v
-                    }
-                },
-            };
-
-            let nasa_image = match get_nasa_image(&parametri) {
-                Ok(image) => image,
-                Err(err) => {
-                    mostra_errore(err.as_ref());
-                    return ExitCode::FAILURE;
-                }
-            };
-            println!("{nasa_image}");
-            println!("{}", MSG_CHANGING.yellow());
-            if let Err(err) = wallpaper::set_from_url(&nasa_image.url) {
-                mostra_errore(&err);
-                return ExitCode::FAILURE;
-            }
-            println!("{}", MSG_DONE.green());
-        }
-        Some(("license", _)) => print_license(),
-        Some(("status", _)) => match health_check() {
-            Ok(()) => println!("Health check: OK (client HTTP, font e URL confermati)"),
+/// Risolve la data APOD richiesta, con fallback a oggi nella zona Eastern.
+fn apod_date(sub_matches: &ArgMatches) -> Result<NaiveDate, ExitCode> {
+    if let Some(date) = sub_matches.get_one::<String>("date") {
+        return match parse_apod_date(date) {
+            Ok(date) => Ok(date),
             Err(err) => {
-                mostra_errore(err.as_ref());
-                return ExitCode::FAILURE;
+                eprintln!(
+                    "{}",
+                    format!("Error: invalid date ({err}). Use YYYY-MM-DD").red()
+                );
+                Err(ExitCode::from(2))
+            }
+        };
+    }
+    let (year, month, day) = get_today_est();
+    match NaiveDate::from_ymd_opt(year, month, day) {
+        Some(date) => Ok(date),
+        None => {
+            eprintln!("{}", "Error: data Eastern non valida".red());
+            Err(ExitCode::FAILURE)
+        }
+    }
+}
+
+/// Esegue il sottocomando apod.
+fn run_apod(sub_matches: &ArgMatches) -> ExitCode {
+    let date = match apod_date(sub_matches) {
+        Ok(date) => date,
+        Err(code) => return code,
+    };
+    if sub_matches.get_one::<String>("key").is_some() {
+        println!(
+            "{}",
+            "Warning: the APOD API no longer requires an API key. The --key option is ignored."
+                .yellow()
+        );
+    }
+    let low = sub_matches.get_flag("low");
+    let apod = match get_apod(APOD_API_URL, date) {
+        Ok(apod) => apod,
+        Err(err) => {
+            mostra_errore(err.as_ref());
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("{apod}");
+    if apod.media_type != "image" {
+        println!(
+            "{} {}",
+            "The date you have chosen for the APOD has no image. See the original content in:"
+                .yellow(),
+            apod.url.yellow()
+        );
+        return ExitCode::SUCCESS;
+    }
+    println!("{}", MSG_CHANGING.yellow());
+    if let Err(err) = set_wallpaper(&apod, low) {
+        mostra_errore(err.as_ref());
+        return ExitCode::FAILURE;
+    }
+    println!("{}", MSG_DONE.green());
+    ExitCode::SUCCESS
+}
+
+/// Esegue il sottocomando unsplash.
+fn run_unsplash() -> ExitCode {
+    if let Err(err) = url_immagine_sicura(URL_UNSPLASH) {
+        mostra_errore(err.as_ref());
+        return ExitCode::FAILURE;
+    }
+    println!("{}", MSG_CHANGING.yellow());
+    if let Err(err) = wallpaper::set_from_url(URL_UNSPLASH) {
+        mostra_errore(&err);
+        return ExitCode::FAILURE;
+    }
+    println!("{}", MSG_DONE.green());
+    ExitCode::SUCCESS
+}
+
+/// Esegue il sottocomando nasa_image.
+fn run_nasa_image(sub_matches: &ArgMatches) -> ExitCode {
+    let valore = |nome: &str| {
+        sub_matches
+            .get_one::<String>(nome)
+            .map(String::as_str)
+            .unwrap_or("")
+    };
+    let (est_year, _, _) = get_today_est();
+    let anno_corrente = est_year.to_string();
+    let parametri = NasaImageQuery {
+        q: valore("query"),
+        center: valore("center"),
+        location: valore("location"),
+        nasa_id: valore("nasa_id"),
+        photographer: valore("photographer"),
+        title: valore("title"),
+        year_start: {
+            let v = valore("year_start");
+            if v.is_empty() {
+                "1900"
+            } else {
+                v
             }
         },
-        _ => return ExitCode::from(2),
+        year_end: {
+            let v = valore("year_end");
+            if v.is_empty() {
+                &anno_corrente
+            } else {
+                v
+            }
+        },
+    };
+    let nasa_image = match get_nasa_image(&parametri) {
+        Ok(image) => image,
+        Err(err) => {
+            mostra_errore(err.as_ref());
+            return ExitCode::FAILURE;
+        }
+    };
+    println!("{nasa_image}");
+    println!("{}", MSG_CHANGING.yellow());
+    if let Err(err) = wallpaper::set_from_url(&nasa_image.url) {
+        mostra_errore(&err);
+        return ExitCode::FAILURE;
     }
+    println!("{}", MSG_DONE.green());
     ExitCode::SUCCESS
+}
+
+/// Verifica lo stato della configurazione e delle dipendenze.
+fn run_status() -> ExitCode {
+    match health_check() {
+        Ok(()) => {
+            println!("Health check: OK (client HTTP, font e URL confermati)");
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            mostra_errore(err.as_ref());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Punto di ingresso del programma.
+///
+/// clap legge gli argomenti dall'ambiente: il codice dell'applicazione non
+/// accede ad argv e non usa argv[0] per decisioni di sicurezza.
+fn main() -> ExitCode {
+    let matches = cli().get_matches();
+    match matches.subcommand() {
+        Some(("apod", sub_matches)) => run_apod(sub_matches),
+        Some(("unsplash", _)) => run_unsplash(),
+        Some(("nasa_image", sub_matches)) => run_nasa_image(sub_matches),
+        Some(("license", _)) => {
+            print_license();
+            ExitCode::SUCCESS
+        }
+        Some(("status", _)) => run_status(),
+        _ => ExitCode::from(2),
+    }
 }
 
 #[cfg(test)]

@@ -11,12 +11,28 @@ TEMP_DIR="${TMPDIR:-/tmp}/nasa-wallpaper"
 HTTP_TIMEOUT=20
 DOWNLOAD_TIMEOUT=30
 
-log_info() { printf '[INFO] %s\n' "$1"; }
-log_success() { printf '[SUCCESS] %s\n' "$1"; }
-log_warning() { printf '[WARNING] %s\n' "$1" >&2; }
-log_error() { printf '[ERROR] %s\n' "$1" >&2; }
+log_info() {
+    local message="$1"
+    printf '[INFO] %s\n' "$message"
+}
+log_success() {
+    local message="$1"
+    printf '[SUCCESS] %s\n' "$message"
+}
+log_warning() {
+    local message="$1"
+    printf '[WARNING] %s\n' "$message" >&2
+}
+log_error() {
+    local message="$1"
+    printf '[ERROR] %s\n' "$message" >&2
+}
 
-die() { log_error "$1"; exit 1; }
+die() {
+    local message="$1"
+    log_error "$message"
+    exit 1
+}
 
 check_dependencies() {
     local missing=()
@@ -30,21 +46,26 @@ check_dependencies() {
     mkdir -p "$CACHE_DIR" "$TEMP_DIR" || die 'Impossibile creare le directory di lavoro'
 }
 
-url_encode() { printf '%s' "$1" | jq -sRr @uri; }
+url_encode() {
+    local value="$1"
+    printf '%s' "$value" | jq -sRr @uri
+}
 
 validate_date() {
-    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
-    if date -d "$1" +%Y-%m-%d >/dev/null 2>&1; then
-        [[ "$(date -d "$1" +%Y-%m-%d)" == "$1" ]]
-    elif date -jf '%Y-%m-%d' "$1" +%Y-%m-%d >/dev/null 2>&1; then
-        [[ "$(date -jf '%Y-%m-%d' "$1" +%Y-%m-%d)" == "$1" ]]
+    local value="$1"
+    [[ "$value" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+    if date -d "$value" +%Y-%m-%d >/dev/null 2>&1; then
+        [[ "$(date -d "$value" +%Y-%m-%d)" == "$value" ]]
+    elif date -jf '%Y-%m-%d' "$value" +%Y-%m-%d >/dev/null 2>&1; then
+        [[ "$(date -jf '%Y-%m-%d' "$value" +%Y-%m-%d)" == "$value" ]]
     else
         return 1
     fi
 }
 
 validate_year() {
-    [[ "$1" =~ ^[0-9]{4}$ ]] && (( 10#$1 >= 1800 && 10#$1 <= 2200 ))
+    local value="$1"
+    [[ "$value" =~ ^[0-9]{4}$ ]] && (( 10#$value >= 1800 && 10#$value <= 2200 ))
 }
 
 validate_image_url() {
@@ -267,10 +288,11 @@ main() {
         apod)
             local data='' low='false'
             while (( $# > 0 )); do
-                case "$1" in
+                local option="$1"
+                case "$option" in
                     -d|--date) (( $# >= 2 )) || die 'Valore mancante per --date'; data="$2"; shift 2 ;;
                     -l|--low) low='true'; shift ;;
-                    *) die "Opzione sconosciuta: $1" ;;
+                    *) die "Opzione sconosciuta: $option" ;;
                 esac
             done
             set_apod "$data" "$low"
@@ -278,12 +300,13 @@ main() {
         nasa_image|nasa-image)
             local q='' center='' ystart='1900' yend=''
             while (( $# > 0 )); do
-                case "$1" in
+                local option="$1"
+                case "$option" in
                     -q|--query) (( $# >= 2 )) || die 'Valore mancante per --query'; q="$2"; shift 2 ;;
                     -c|--center) (( $# >= 2 )) || die 'Valore mancante per --center'; center="$2"; shift 2 ;;
                     --year-start) (( $# >= 2 )) || die 'Valore mancante per --year-start'; ystart="$2"; shift 2 ;;
                     --year-end) (( $# >= 2 )) || die 'Valore mancante per --year-end'; yend="$2"; shift 2 ;;
-                    *) die "Opzione sconosciuta: $1" ;;
+                    *) die "Opzione sconosciuta: $option" ;;
                 esac
             done
             set_nasa_image "$q" "$center" "$ystart" "$yend"
