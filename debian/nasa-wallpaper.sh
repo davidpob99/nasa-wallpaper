@@ -101,7 +101,8 @@ set_apod() {
     [[ -z "$data" ]] && data=$(get_today_est)
     validate_date "$data" || die "Data non valida: usare YYYY-MM-DD"
 
-    local url="${APOD_ENDPOINT}/$(date_code "$data")"
+    local url
+    url="${APOD_ENDPOINT}/$(date_code "$data")"
     log_info "Recupero APOD per $data..."
     local response
     response=$(http_get "$url") || die 'Recupero APOD non riuscito'
@@ -188,7 +189,8 @@ set_wallpaper_from_url() {
 
     local ext='jpg'
     [[ "$url" == *.png ]] && ext='png'
-    local filename="$TEMP_DIR/${name}-$(date +%s).${ext}"
+    local filename
+    filename="$TEMP_DIR/${name}-$(date +%s).${ext}"
 
     log_info 'Download immagine...'
     if ! curl --fail-with-body --silent --show-error --location \
