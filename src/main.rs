@@ -268,6 +268,21 @@ fn url_immagine_sicura(raw: &str) -> WallpaperResult<Url> {
     Ok(url)
 }
 
+/// Costruisce il messaggio di errore per una risposta APOD non riuscita.
+fn apod_api_error(status: reqwest::StatusCode, body: &str) -> String {
+    let detail = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|err| {
+            let code = err["code"].as_str()?;
+            let message = err["message"].as_str()?;
+            Some(format!("{message} [{code}]"))
+        });
+    match detail {
+        Some(detail) => format!("APOD API error ({}): {detail}", status.as_u16()),
+        None => format!("APOD API error ({status})"),
+    }
+}
+
 /// Recupera i metadati APOD per una data.
 ///
 /// # Errori
@@ -283,19 +298,7 @@ fn get_apod(base_url: &str, date: Date) -> WallpaperResult<Apod> {
     let response = client.get(&request_url).send()?;
     let status = response.status();
     if !status.is_success() {
-        let body = response.text()?;
-        let message = serde_json::from_str::<serde_json::Value>(&body)
-            .ok()
-            .and_then(|err| {
-                let code = err["code"].as_str()?;
-                let message = err["message"].as_str()?;
-                Some(format!("{message} [{code}]"))
-            })
-            .map_or_else(
-                || format!("APOD API error ({status})"),
-                |detail| format!("APOD API error ({}): {}", status.as_u16(), detail),
-            );
-        return Err(message.into());
+        return Err(apod_api_error(status, &response.text()?).into());
     }
     Ok(response.json::<Apod>()?)
 }
@@ -605,16 +608,13 @@ fn mostra_errore(err: &dyn Error) {
 /// Risolve la data APOD richiesta, con fallback a oggi nella zona Eastern.
 fn apod_date(sub_matches: &ArgMatches) -> Result<Date, ExitCode> {
     if let Some(date) = sub_matches.get_one::<String>("date") {
-        return match parse_apod_date(date) {
-            Ok(date) => Ok(date),
-            Err(err) => {
-                eprintln!(
-                    "{}",
-                    format!("Error: invalid date ({err}). Use YYYY-MM-DD").red()
-                );
-                Err(ExitCode::from(2))
-            }
-        };
+        return parse_apod_date(date).map_err(|err| {
+            eprintln!(
+                "{}",
+                format!("Error: invalid date ({err}). Use YYYY-MM-DD").red()
+            );
+            ExitCode::from(2)
+        });
     }
     match get_today_est() {
         Ok(date) => Ok(date),
