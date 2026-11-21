@@ -29,7 +29,9 @@ jobs:
 
       - name: Installa SonarScanner
         run: |
-          curl -sSLo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.5.0.16571-linux.zip
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output /tmp/sonar-scanner.zip \
+            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.5.0.16571-linux.zip
           unzip -q /tmp/sonar-scanner.zip -d /tmp/sonar-scanner
           echo "/tmp/sonar-scanner/sonar-scanner-8.5.0.16571-linux/bin" >> "$GITHUB_PATH"
 
