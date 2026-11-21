@@ -8,9 +8,8 @@
 
 pub mod text_renderer;
 
-use chrono::prelude::*;
-use chrono_tz::Tz;
-use chrono_tz::US::Eastern;
+use jiff::civil::Date;
+use jiff::Timestamp;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use colored::Colorize;
 use rand::Rng;
@@ -140,13 +139,18 @@ struct NasaImageQuery<'a> {
 }
 
 /// Analizza una data APOD nel formato `YYYY-MM-DD`.
-fn parse_apod_date(date: &str) -> Result<NaiveDate, chrono::ParseError> {
-    NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
+fn parse_apod_date(date: &str) -> Result<Date, jiff::Error> {
+    Date::strptime("%Y-%m-%d", date.trim())
 }
 
 /// Restituisce il codice data legacy (`YYMMDD`) usato dalle route APOD.
-fn apod_date_code(date: NaiveDate) -> String {
-    date.format("%y%m%d").to_string()
+fn apod_date_code(date: Date) -> String {
+    format!(
+        "{:02}{:02}{:02}",
+        date.year().rem_euclid(100),
+        date.month(),
+        date.day()
+    )
 }
 
 /// Converte un frammento HTML dell'API APOD in testo semplice per terminale.
@@ -240,9 +244,12 @@ fn http_client() -> WallpaperResult<reqwest::blocking::Client> {
 }
 
 /// Scarica un URL e interpreta il corpo come JSON.
-fn json_da_url(client: &reqwest::blocking::Client, url: Url) -> WallpaperResult<json::JsonValue> {
+fn json_da_url(
+    client: &reqwest::blocking::Client,
+    url: Url,
+) -> WallpaperResult<serde_json::Value> {
     let testo = client.get(url).send()?.text()?;
-    Ok(json::parse(&testo)?)
+    Ok(serde_json::from_str(&testo)?)
 }
 
 /// Verifica che un URL sia HTTPS e appartenga a un host autorizzato.
@@ -266,7 +273,7 @@ fn url_immagine_sicura(raw: &str) -> WallpaperResult<Url> {
 /// # Errori
 /// Restituisce errore se la richiesta fallisce, se lo stato non è 2xx
 /// (includendo il messaggio API quando disponibile) o se il JSON non è valido.
-fn get_apod(base_url: &str, date: NaiveDate) -> WallpaperResult<Apod> {
+fn get_apod(base_url: &str, date: Date) -> WallpaperResult<Apod> {
     let request_url = format!(
         "{}/{}",
         base_url.trim_end_matches('/'),
@@ -277,12 +284,12 @@ fn get_apod(base_url: &str, date: NaiveDate) -> WallpaperResult<Apod> {
     let status = response.status();
     if !status.is_success() {
         let body = response.text()?;
-        let message = json::parse(&body)
+        let message = serde_json::from_str::<serde_json::Value>(&body)
             .ok()
             .and_then(|err| {
-                err["message"]
-                    .as_str()
-                    .map(|m| format!("{} [{}]", m, err["code"]))
+                let code = err["code"].as_str()?;
+                let message = err["message"].as_str()?;
+                Some(format!("{message} [{code}]"))
             })
             .map_or_else(
                 || format!("APOD API error ({status})"),
@@ -334,7 +341,8 @@ fn conta_risultati(
     let url = costruisci_url_ricerca(parametri, None)?;
     let json = json_da_url(client, url)?;
     json["collection"]["metadata"]["total_hits"]
-        .as_usize()
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
         .ok_or("Campo total_hits mancante o non valido".into())
 }
 
@@ -343,18 +351,20 @@ fn pagina_casuale(
     client: &reqwest::blocking::Client,
     parametri: &NasaImageQuery<'_>,
     total_hits: usize,
-) -> WallpaperResult<Vec<json::JsonValue>> {
+) -> WallpaperResult<Vec<serde_json::Value>> {
     // 100 risultati per pagina: page_count è almeno 1.
     let page_count = total_hits.div_ceil(100).min(101);
     let mut rng = rand::rng();
     let index_page = rng.random_range(0..page_count) as u32;
     let url = costruisci_url_ricerca(parametri, Some(index_page))?;
     let json = json_da_url(client, url)?;
-    let items = &json["collection"]["items"];
+    let items = json["collection"]["items"]
+        .as_array()
+        .ok_or("Campo items mancante o non valido")?;
     if items.is_empty() {
         return Err("Pagina di risultati vuota".into());
     }
-    Ok(items.members().cloned().collect())
+    Ok(items.clone())
 }
 
 /// Risolve e valida l'URL dell'asset a partire dalla collezione.
@@ -370,7 +380,7 @@ fn url_asset_collezione(
 }
 
 /// Legge un campo obbligatorio dall'elemento selezionato.
-fn campo_obbligatorio(data: &json::JsonValue, nome: &str) -> WallpaperResult<String> {
+fn campo_obbligatorio(data: &serde_json::Value, nome: &str) -> WallpaperResult<String> {
     data[nome]
         .as_str()
         .map(str::to_owned)
@@ -429,9 +439,8 @@ fn print_license() {
 }
 
 /// Restituisce la data odierna nel fuso US Eastern (EST/EDT).
-fn get_today_est() -> (i32, u32, u32) {
-    let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
-    (est_now.year(), est_now.month(), est_now.day())
+fn get_today_est() -> Result<Date, jiff::Error> {
+    Ok(Timestamp::now().in_tz("America/New_York")?.date())
 }
 
 /// Costruisce più argomenti con forma breve e lunga.
@@ -594,7 +603,7 @@ fn mostra_errore(err: &dyn Error) {
 /// clap legge gli argomenti dall'ambiente: il codice dell'applicazione non
 /// accede ad argv e non usa argv[0] per decisioni di sicurezza.
 /// Risolve la data APOD richiesta, con fallback a oggi nella zona Eastern.
-fn apod_date(sub_matches: &ArgMatches) -> Result<NaiveDate, ExitCode> {
+fn apod_date(sub_matches: &ArgMatches) -> Result<Date, ExitCode> {
     if let Some(date) = sub_matches.get_one::<String>("date") {
         return match parse_apod_date(date) {
             Ok(date) => Ok(date),
@@ -607,11 +616,10 @@ fn apod_date(sub_matches: &ArgMatches) -> Result<NaiveDate, ExitCode> {
             }
         };
     }
-    let (year, month, day) = get_today_est();
-    match NaiveDate::from_ymd_opt(year, month, day) {
-        Some(date) => Ok(date),
-        None => {
-            eprintln!("{}", "Error: data Eastern non valida".red());
+    match get_today_est() {
+        Ok(date) => Ok(date),
+        Err(err) => {
+            eprintln!("{}", format!("Error: data Eastern non valida ({err})").red());
             Err(ExitCode::FAILURE)
         }
     }
@@ -680,7 +688,13 @@ fn run_nasa_image(sub_matches: &ArgMatches) -> ExitCode {
             .map(String::as_str)
             .unwrap_or("")
     };
-    let (est_year, _, _) = get_today_est();
+    let est_year = match get_today_est() {
+        Ok(date) => date.year(),
+        Err(err) => {
+            mostra_errore(&err);
+            return ExitCode::FAILURE;
+        }
+    };
     let anno_corrente = est_year.to_string();
     let parametri = NasaImageQuery {
         q: valore("query"),
