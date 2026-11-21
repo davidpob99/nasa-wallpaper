@@ -15,9 +15,7 @@ use clap::{Arg, ArgAction, Command};
 use colored::*;
 use rand::Rng;
 use reqwest::Url;
-use std::env;
 use std::error::Error;
-use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -421,6 +419,7 @@ fn cli() -> Command {
         .arg_required_else_help(true)
         .subcommand(
             Command::new("apod")
+                .alias("-a")
                 .about("Get the APOD (Astronomical Picture of the Day)")
                 .arg(
                     Arg::new("date")
@@ -448,6 +447,7 @@ fn cli() -> Command {
         )
         .subcommand(
             Command::new("nasa_image")
+                .alias("-n")
                 .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
                 .arg(
                     Arg::new("query")
@@ -520,18 +520,6 @@ fn cli() -> Command {
         .subcommand(Command::new("status").about("Run a local health check of the configuration"))
 }
 
-/// Normalizza gli argomenti per le shorthand legacy (`-a`, `-n`).
-fn normalize_args(mut args: Vec<OsString>) -> Vec<OsString> {
-    if args.len() >= 2 {
-        if args[1] == OsStr::new("-a") {
-            args[1] = OsString::from("apod");
-        } else if args[1] == OsStr::new("-n") {
-            args[1] = OsString::from("nasa_image");
-        }
-    }
-    args
-}
-
 /// Esegue il controllo di integrità locale (rete, font e URL).
 fn health_check() -> WallpaperResult<()> {
     let client = http_client()?;
@@ -546,21 +534,12 @@ fn mostra_errore(err: &dyn Error) {
     eprintln!("{}", format!("Error: {err}").red());
 }
 
-/// Raccoglie gli argomenti utente senza mai usare argv[0].
-///
-/// Il nome del programma passato a clap è una costante: argv[0] può contenere
-/// testo arbitrario e non deve essere usato per decisioni di sicurezza.
-/// Vengono letti solo gli argomenti effettivi, a partire dal secondo.
-fn command_line_args() -> Vec<OsString> {
-    let mut args = vec![OsString::from("nasa-wallpaper")];
-    args.extend(env::args_os().skip(1));
-    normalize_args(args)
-}
-
 /// Punto di ingresso del programma.
+///
+/// clap legge gli argomenti dall'ambiente: il codice dell'applicazione non
+/// accede ad argv e non usa argv[0] per decisioni di sicurezza.
 fn main() -> ExitCode {
-    let args = command_line_args();
-    let matches = cli().get_matches_from(args);
+    let matches = cli().get_matches();
 
     match matches.subcommand() {
         Some(("apod", sub_matches)) => {

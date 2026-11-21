@@ -326,22 +326,23 @@ fn cli_low_defaults_to_false() {
 }
 
 #[test]
-fn command_line_args_does_not_trust_argv0() {
-    // Il nome del programma nel processo di test è il binario di cargo test:
-    // deve essere sostituito dalla costante, non propagato a clap.
-    let args = command_line_args();
-    assert_eq!(args.first(), Some(&OsString::from("nasa-wallpaper")));
+fn cli_accepts_legacy_shorthands_as_subcommand_aliases() {
+    let apod = cli()
+        .try_get_matches_from(["nasa-wallpaper", "-a"])
+        .expect("alias -a valido");
+    assert_eq!(apod.subcommand_name(), Some("apod"));
+
+    let nasa = cli()
+        .try_get_matches_from(["nasa-wallpaper", "-n"])
+        .expect("alias -n valido");
+    assert_eq!(nasa.subcommand_name(), Some("nasa_image"));
 }
 
 #[test]
 fn cli_still_accepts_legacy_api_key() {
-    let args = normalize_args(
-        ["nasa-wallpaper", "-a", "-k", "DEMO_KEY"]
-            .iter()
-            .map(OsString::from)
-            .collect(),
-    );
-    let matches = cli().try_get_matches_from(args).expect("CLI valida");
+    let matches = cli()
+        .try_get_matches_from(["nasa-wallpaper", "-a", "-k", "DEMO_KEY"])
+        .expect("CLI valida");
     let sub = matches.subcommand_matches("apod").expect("apod");
     assert_eq!(sub.get_one::<String>("key").expect("chiave"), "DEMO_KEY");
 }
