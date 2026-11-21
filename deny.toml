@@ -1,0 +1,16 @@
+# Configurazione cargo-deny per i controlli di sicurezza delle dipendenze.
+[advisories]
+version = 2
+ignore = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = [
+    { crate = "openssl", use-instead = "rustls" },
+    { crate = "openssl-sys", use-instead = "rustls" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
