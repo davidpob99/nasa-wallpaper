@@ -69,3 +69,11 @@ Prima degli interventi: 83 finding (4 Error, 6 Warning,
 - `Agentlinter` (4): indicazioni di leggibilita' della
   documentazione, non difetti di sicurezza.
 
+### Falso positivo del delta sul PR 5
+
+Codacy attribuisce a `arg_fotografo` 110 righe di codice: la
+funzione ne occupa 9. Il valore corrisponde alle 108 righe del
+vecchio `cli()` prima del refactoring (ora 41 righe). La
+motivazione e' riportata nel thread della PR. Nessuna
+soppressione ne' soglia modificata.
+
