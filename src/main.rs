@@ -283,6 +283,18 @@ fn apod_api_error(status: reqwest::StatusCode, body: &str) -> String {
     }
 }
 
+/// Verifica lo stato della risposta APOD, restituendola se è 2xx.
+fn verifica_risposta(
+    response: reqwest::blocking::Response,
+) -> WallpaperResult<reqwest::blocking::Response> {
+    let status = response.status();
+    if status.is_success() {
+        Ok(response)
+    } else {
+        Err(apod_api_error(status, &response.text()?).into())
+    }
+}
+
 /// Recupera i metadati APOD per una data.
 ///
 /// # Errori
@@ -294,12 +306,7 @@ fn get_apod(base_url: &str, date: Date) -> WallpaperResult<Apod> {
         base_url.trim_end_matches('/'),
         apod_date_code(date)
     );
-    let client = http_client()?;
-    let response = client.get(&request_url).send()?;
-    let status = response.status();
-    if !status.is_success() {
-        return Err(apod_api_error(status, &response.text()?).into());
-    }
+    let response = verifica_risposta(http_client()?.get(&request_url).send()?)?;
     Ok(response.json::<Apod>()?)
 }
 
