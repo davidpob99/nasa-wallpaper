@@ -23,6 +23,7 @@ imageproc = { version = "0.23", default-features = false }
 rusttype = { version = "0.9", default-features = false }
 textwrap = "0.16"
 anyhow = "1.0"
+tempfile = "3"
 
 [dev-dependencies]
 mockito = "1"

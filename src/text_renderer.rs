@@ -8,6 +8,7 @@ use image::{GenericImageView, Rgba};
 use imageproc::drawing::draw_text_mut;
 use rusttype::{Font, Scale};
 use std::path::{Path, PathBuf};
+use tempfile::{Builder, NamedTempFile};
 
 /// Dimensione massima accettata per un'immagine (32 MiB).
 const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
@@ -154,18 +155,27 @@ pub fn draw_overlay(image_bytes: &[u8], title: &str, explanation: &str) -> Resul
         &wrapped_explanation,
     );
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .context("Orologio di sistema non valido")?
-        .as_millis();
-    let percorso = std::env::temp_dir().join(format!("nasa-wallpaper-overlay-{timestamp}.jpg"));
-    rgba_image.save(&percorso).with_context(|| {
-        format!(
-            "Salvataggio immagine in {} non riuscito",
-            percorso.display()
-        )
-    })?;
+    let mut overlay = nuovo_file_overlay()?;
+    rgba_image
+        .write_to(overlay.as_file_mut(), image::ImageFormat::Jpeg)
+        .context("Salvataggio immagine non riuscito")?;
+    let (_file, percorso) = overlay
+        .keep()
+        .context("Persistenza del file temporaneo non riuscita")?;
     Ok(percorso)
+}
+
+/// Crea il file di overlay con nome casuale e apertura esclusiva.
+///
+/// `tempfile` genera un nome imprevedibile e crea il file in modalità
+/// `create_new` (O_EXCL), evitando il nome prevedibile basato su timestamp
+/// e le race condition con symlink in directory condivise.
+fn nuovo_file_overlay() -> Result<NamedTempFile> {
+    Builder::new()
+        .prefix("nasa-wallpaper-overlay-")
+        .suffix(".jpg")
+        .tempfile()
+        .context("Creazione del file temporaneo non riuscita")
 }
 
 #[cfg(test)]
@@ -178,6 +188,20 @@ mod tests {
             Ok(_) => println!("System font successfully found."),
             Err(e) => println!("System font not found (can happen in headless CI): {e}"),
         }
+    }
+
+    #[test]
+    fn file_overlay_has_unique_unpredictable_name() {
+        let primo = nuovo_file_overlay().expect("primo file temporaneo");
+        let secondo = nuovo_file_overlay().expect("secondo file temporaneo");
+        assert_ne!(primo.path(), secondo.path());
+        let nome = primo
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("nome file valido");
+        assert!(nome.starts_with("nasa-wallpaper-overlay-"));
+        assert!(nome.ends_with(".jpg"));
     }
 
     #[test]
