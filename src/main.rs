@@ -320,6 +320,60 @@ fn valida_anno(anno: &str) -> WallpaperResult<u32> {
     Ok(valore)
 }
 
+/// Conta i risultati della ricerca nella libreria immagini NASA.
+fn conta_risultati(
+    client: &reqwest::blocking::Client,
+    parametri: &NasaImageQuery<'_>,
+) -> WallpaperResult<usize> {
+    let url = costruisci_url_ricerca(parametri, None)?;
+    let testo = client.get(url).send()?.text()?;
+    let json = json::parse(&testo)?;
+    json["collection"]["metadata"]["total_hits"]
+        .as_usize()
+        .ok_or("Campo total_hits mancante o non valido".into())
+}
+
+/// Restituisce gli elementi di una pagina di risultati scelta a caso.
+fn pagina_casuale(
+    client: &reqwest::blocking::Client,
+    parametri: &NasaImageQuery<'_>,
+    total_hits: usize,
+) -> WallpaperResult<Vec<json::JsonValue>> {
+    // 100 risultati per pagina: page_count è almeno 1.
+    let page_count = total_hits.div_ceil(100).min(101);
+    let mut rng = rand::rng();
+    let index_page = rng.random_range(0..page_count) as u32;
+    let url = costruisci_url_ricerca(parametri, Some(index_page))?;
+    let testo = client.get(url).send()?.text()?;
+    let json = json::parse(&testo)?;
+    let items = &json["collection"]["items"];
+    if items.is_empty() {
+        return Err("Pagina di risultati vuota".into());
+    }
+    Ok(items.members().cloned().collect())
+}
+
+/// Risolve e valida l'URL dell'asset a partire dalla collezione.
+fn url_asset_collezione(
+    client: &reqwest::blocking::Client,
+    url_collezione: &str,
+) -> WallpaperResult<String> {
+    let url_immagine = url_immagine_sicura(url_collezione)?;
+    let testo = client.get(url_immagine).send()?.text()?;
+    let json = json::parse(&testo)?;
+    let asset = json[0].as_str().ok_or("URL dell'asset mancante")?;
+    url_immagine_sicura(asset)?;
+    Ok(asset.to_owned())
+}
+
+/// Legge un campo obbligatorio dall'elemento selezionato.
+fn campo_obbligatorio(data: &json::JsonValue, nome: &str) -> WallpaperResult<String> {
+    data[nome]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("Campo {nome} mancante").into())
+}
+
 /// Recupera un'immagine casuale dalla NASA Image Library.
 ///
 /// Tutti i passaggi possono fallire e restituiscono un errore: non ci sono
@@ -329,63 +383,30 @@ fn get_nasa_image(parametri: &NasaImageQuery<'_>) -> WallpaperResult<NasaImage> 
     valida_anno(parametri.year_end)?;
 
     let client = http_client()?;
-    let url_base = costruisci_url_ricerca(parametri, None)?;
-
-    let testo = client.get(url_base.clone()).send()?.text()?;
-    let json_risposta = json::parse(&testo)?;
-    let num_hits = json_risposta["collection"]["metadata"]["total_hits"]
-        .as_usize()
-        .ok_or("Campo total_hits mancante o non valido")?;
-
-    if num_hits == 0 {
+    let total_hits = conta_risultati(&client, parametri)?;
+    if total_hits == 0 {
         return Err("Nessun risultato per i criteri richiesti".into());
     }
 
-    // 100 risultati per pagina: page_count è almeno 1.
-    let page_count = num_hits.div_ceil(100).min(101);
+    let items = pagina_casuale(&client, parametri, total_hits)?;
     let mut rng = rand::rng();
-    let index_page = rng.random_range(0..page_count) as u32;
-    let url_pagina = costruisci_url_ricerca(parametri, Some(index_page))?;
-
-    let testo_pagina = client.get(url_pagina).send()?.text()?;
-    let json_pagina = json::parse(&testo_pagina)?;
-    let items = &json_pagina["collection"]["items"];
-    let num_items = items.len();
-    if num_items == 0 {
-        return Err("Pagina di risultati vuota".into());
-    }
-    let index = rng.random_range(0..num_items);
-    let item = &items[index];
+    let item = &items[rng.random_range(0..items.len())];
     let data = &item["data"][0];
     let url_collezione = item["href"]
         .as_str()
         .ok_or("URL della collezione mancante")?;
+    let asset = url_asset_collezione(&client, url_collezione)?;
 
-    let url_immagine = url_immagine_sicura(url_collezione)?;
-    let testo_collezione = client.get(url_immagine).send()?.text()?;
-    let json_collezione = json::parse(&testo_collezione)?;
-    let url_asset = json_collezione[0]
-        .as_str()
-        .ok_or("URL dell'asset mancante")?;
-    url_immagine_sicura(url_asset)?;
-
-    let campo = |nome: &str| -> WallpaperResult<String> {
-        data[nome]
-            .as_str()
-            .map(|s| s.to_owned())
-            .ok_or_else(|| format!("Campo {nome} mancante").into())
-    };
-
-    let mut date = campo("date_created")?;
+    let mut date = campo_obbligatorio(data, "date_created")?;
     date.truncate(10);
 
     Ok(NasaImage {
-        nasa_id: campo("nasa_id")?,
-        title: campo("title")?,
-        center: campo("center")?,
-        description: campo("description")?,
+        nasa_id: campo_obbligatorio(data, "nasa_id")?,
+        title: campo_obbligatorio(data, "title")?,
+        center: campo_obbligatorio(data, "center")?,
+        description: campo_obbligatorio(data, "description")?,
         date,
-        url: url_asset.to_owned(),
+        url: asset,
     })
 }
 
@@ -408,6 +429,76 @@ fn print_license() {
 fn get_today_est() -> (i32, u32, u32) {
     let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
     (est_now.year(), est_now.month(), est_now.day())
+}
+
+/// Costruisce il sottocomando `nasa_image`.
+fn comando_nasa_image() -> Command {
+    Command::new("nasa_image")
+        .alias("-n")
+        .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
+        .arg(
+            Arg::new("query")
+                .short('q')
+                .long("query")
+                .value_name("Q")
+                .action(ArgAction::Set)
+                .help("Free text search terms to compare to all indexed metadata"),
+        )
+        .arg(
+            Arg::new("center")
+                .short('c')
+                .long("center")
+                .value_name("CENTER")
+                .action(ArgAction::Set)
+                .help("NASA center which published the media"),
+        )
+        .arg(
+            Arg::new("location")
+                .short('o')
+                .long("location")
+                .value_name("LOCATION")
+                .action(ArgAction::Set)
+                .help("Terms to search for in “Location” fields"),
+        )
+        .arg(
+            Arg::new("nasa_id")
+                .short('i')
+                .long("nasa_id")
+                .value_name("NASA_ID")
+                .action(ArgAction::Set)
+                .help("The media asset’s NASA ID"),
+        )
+        .arg(
+            Arg::new("photographer")
+                .short('p')
+                .long("photographer")
+                .visible_alias("phtographer")
+                .value_name("PHOTOGRAPHER")
+                .action(ArgAction::Set)
+                .help("The primary photographer’s name"),
+        )
+        .arg(
+            Arg::new("title")
+                .short('t')
+                .long("title")
+                .value_name("TITLE")
+                .action(ArgAction::Set)
+                .help("Terms to search for in “Title” fields"),
+        )
+        .arg(
+            Arg::new("year_start")
+                .long("year_start")
+                .value_name("YEAR_START")
+                .action(ArgAction::Set)
+                .help("The start year for results. Format: YYYY"),
+        )
+        .arg(
+            Arg::new("year_end")
+                .long("year_end")
+                .value_name("YEAR_END")
+                .action(ArgAction::Set)
+                .help("The end year for results. Format: YYYY"),
+        )
 }
 
 /// Costruisce la definizione della CLI.
@@ -445,74 +536,7 @@ fn cli() -> Command {
                         .help("Use a lower resolution image"),
                 ),
         )
-        .subcommand(
-            Command::new("nasa_image")
-                .alias("-n")
-                .about("Get a random image from the NASA Image Library (https://images.nasa.gov)")
-                .arg(
-                    Arg::new("query")
-                        .short('q')
-                        .long("query")
-                        .value_name("Q")
-                        .action(ArgAction::Set)
-                        .help("Free text search terms to compare to all indexed metadata"),
-                )
-                .arg(
-                    Arg::new("center")
-                        .short('c')
-                        .long("center")
-                        .value_name("CENTER")
-                        .action(ArgAction::Set)
-                        .help("NASA center which published the media"),
-                )
-                .arg(
-                    Arg::new("location")
-                        .short('o')
-                        .long("location")
-                        .value_name("LOCATION")
-                        .action(ArgAction::Set)
-                        .help("Terms to search for in “Location” fields"),
-                )
-                .arg(
-                    Arg::new("nasa_id")
-                        .short('i')
-                        .long("nasa_id")
-                        .value_name("NASA_ID")
-                        .action(ArgAction::Set)
-                        .help("The media asset’s NASA ID"),
-                )
-                .arg(
-                    Arg::new("photographer")
-                        .short('p')
-                        .long("photographer")
-                        .visible_alias("phtographer")
-                        .value_name("PHOTOGRAPHER")
-                        .action(ArgAction::Set)
-                        .help("The primary photographer’s name"),
-                )
-                .arg(
-                    Arg::new("title")
-                        .short('t')
-                        .long("title")
-                        .value_name("TITLE")
-                        .action(ArgAction::Set)
-                        .help("Terms to search for in “Title” fields"),
-                )
-                .arg(
-                    Arg::new("year_start")
-                        .long("year_start")
-                        .value_name("YEAR_START")
-                        .action(ArgAction::Set)
-                        .help("The start year for results. Format: YYYY"),
-                )
-                .arg(
-                    Arg::new("year_end")
-                        .long("year_end")
-                        .value_name("YEAR_END")
-                        .action(ArgAction::Set)
-                        .help("The end year for results. Format: YYYY"),
-                ),
-        )
+        .subcommand(comando_nasa_image())
         .subcommand(Command::new("unsplash").about(
             "Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)",
         ))
