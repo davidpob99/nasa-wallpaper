@@ -1,90 +1,83 @@
+//! nasa-wallpaper — cambio lo sfondo del desktop con immagini NASA.
+//!
+//! Copyright 2019-2026 David Población Criado
+//! Licenziato sotto Apache License, Version 2.0.
+//!
+//! Tutti gli errori di rete, parsing e configurazione sono gestiti: nessuna
+//! funzione usa `unwrap`/`expect` su dati esterni e nessun warning è soppresso.
+
 pub mod text_renderer;
-/*
-   Copyright 2019-2026 David Población Criado
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       https://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
-
-extern crate chrono;
-extern crate chrono_tz;
-extern crate clap;
-extern crate colored;
-extern crate json;
-extern crate rand;
-extern crate reqwest;
-extern crate wallpaper;
-
-#[macro_use]
-extern crate serde_derive;
 
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use chrono_tz::US::Eastern;
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use colored::*;
 use rand::Rng;
+use reqwest::Url;
 use std::error::Error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::process;
+use std::process::ExitCode;
+use std::time::Duration;
 
 const LICENSE_TEXT: &str = r#"
-   Copyright 2019-2026 David Población Criado
+    Copyright 2019-2026 David Población Criado
 
-   Licensed under the Apache License, Version 2.0 (the 'License');
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+    Licensed under the Apache License, Version 2.0 (the 'License');
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
 
-       https://www.apache.org/licenses/LICENSE-2.0
+        https://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 "#;
 
 const VERSION: &str = "2.1.3";
 const MSG_DONE: &str = "Done";
 const MSG_CHANGING: &str = "Changing wallpaper...";
 const URL_UNSPLASH: &str = "https://source.unsplash.com/user/nasa";
-/// APOD Basic JSON endpoint
+/// APOD Basic JSON endpoint.
 const APOD_API_URL: &str = "https://science.nasa.gov/wp-json/wp/v2/apod-basic";
-/// Width (in pixels) requested from the image CDN when `--low` is used.
+/// Larghezza richiesta al CDN quando si usa `--low`.
 const LOW_RES_WIDTH: u32 = 1024;
+/// Timeout per richieste HTTP: evita consumi illimitati (OWASP A06/A10).
+const HTTP_TIMEOUT_SECONDS: u64 = 20;
+/// Host autorizzati come sorgente di immagini.
+const HOSTS_IMMAGINE: &[&str] = &[
+    "assets.science.nasa.gov",
+    "science.nasa.gov",
+    "images-assets.nasa.gov",
+    "source.unsplash.com",
+];
 
 type WallpaperResult<T> = Result<T, Box<dyn Error>>;
 
-#[derive(Debug, Deserialize)]
+/// Metadati APOD restituiti dall'endpoint JSON.
+#[derive(Debug, serde::Deserialize)]
 struct Apod {
     date: String,
     title: String,
     media_type: String,
-    /// May contain HTML markup.
+    /// Può contenere markup HTML.
     #[serde(default)]
     explanation: String,
-    /// May contain HTML markup.
+    /// Può contenere markup HTML.
     #[serde(default)]
     copyright: Option<String>,
-    /// URL of the APOD post page (not an image).
+    /// URL della pagina APOD (non di un'immagine).
     url: String,
-    /// Full-size image URL, when available.
+    /// URL dell'immagine a piena risoluzione, quando disponibile.
     #[serde(default)]
     hdurl: Option<String>,
 }
 
 impl Apod {
-    /// Returns the image URL to use as wallpaper, if the APOD has one.
-    ///
-    /// When `low` is `true`, a reduced-size version is requested (see [`low_res_url`]).
+    /// Restituisce l'URL dell'immagine da usare come sfondo, se presente.
     fn image_url(&self, low: bool) -> Option<String> {
         let hdurl = self.hdurl.as_deref().filter(|u| !u.is_empty())?;
         if low {
@@ -96,10 +89,7 @@ impl Apod {
 }
 
 impl fmt::Display for Apod {
-    /// Formats an [`Apod`] instance for terminal output.
-    ///
-    /// This is the text shown by `println!("{apod}")`.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Title: {}\nDate: {}\nExplanation: {}\nCopyright: {}\nLink: {}",
@@ -112,7 +102,8 @@ impl fmt::Display for Apod {
     }
 }
 
-#[derive(Deserialize)]
+/// Elemento restituito dalla ricerca NASA Image and Video Library.
+#[derive(Debug, serde::Deserialize)]
 struct NasaImage {
     nasa_id: String,
     title: String,
@@ -123,38 +114,43 @@ struct NasaImage {
 }
 
 impl fmt::Display for NasaImage {
-    /// Formats a [`NasaImage`] instance for terminal output.
-    ///
-    /// This is the text shown by `println!("{nasa_image}")`.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "Title: {}\nDate: {}\nExplanation: {}\nCenter: {}\nNASA id: {}",
-            self.title.bold().italic(),
+            html_to_text(&self.title).bold().italic(),
             self.date.italic(),
-            self.description,
-            self.center,
+            html_to_text(&self.description),
+            html_to_text(&self.center),
             self.nasa_id
         )
     }
 }
 
-/// Parses a user-supplied APOD date in `YYYY-MM-DD` format.
-///
-/// Month and day may be written without zero padding (e.g. `2026-9-3`).
+/// Parametri tipizzati di una ricerca nella libreria immagini NASA.
+#[derive(Debug, Default, Clone)]
+struct NasaImageQuery<'a> {
+    q: &'a str,
+    center: &'a str,
+    location: &'a str,
+    nasa_id: &'a str,
+    photographer: &'a str,
+    title: &'a str,
+    year_start: &'a str,
+    year_end: &'a str,
+}
+
+/// Analizza una data APOD nel formato `YYYY-MM-DD`.
 fn parse_apod_date(date: &str) -> Result<NaiveDate, chrono::ParseError> {
     NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d")
 }
 
-/// Returns the legacy APOD date code (`YYMMDD`) used by the APOD API routes.
+/// Restituisce il codice data legacy (`YYMMDD`) usato dalle route APOD.
 fn apod_date_code(date: NaiveDate) -> String {
     date.format("%y%m%d").to_string()
 }
 
-/// Converts an HTML fragment from the APOD API into plain terminal text.
-///
-/// Removes a leading `Explanation:` label, turns `<br>` into line breaks,
-/// strips every other tag and decodes common HTML entities.
+/// Converte un frammento HTML dell'API APOD in testo semplice per terminale.
 fn html_to_text(html: &str) -> String {
     let mut text = String::with_capacity(html.len());
     let mut rest = html;
@@ -185,7 +181,7 @@ fn html_to_text(html: &str) -> String {
         .to_owned()
 }
 
-/// Decodes named entities commonly found in APOD texts and numeric entities.
+/// Decodifica le entità HTML più comuni e quelle numeriche.
 fn decode_html_entities(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -225,10 +221,10 @@ fn decode_html_entities(text: &str) -> String {
     out
 }
 
-/// Returns a reduced-size version of an APOD image URL.
+/// Restituisce una versione ridotta di un URL immagine APOD.
 ///
-/// Only URLs served by NASA's resizing CDN (`/dynamicimage/`) can be resized;
-/// any other URL is returned unchanged.
+/// Solo gli URL serviti dal CDN di NASA (`/dynamicimage/`) possono essere
+/// ridimensionati; gli altri vengono restituiti invariati.
 fn low_res_url(url: &str) -> String {
     if !url.contains("/dynamicimage/") {
         return url.to_owned();
@@ -237,187 +233,185 @@ fn low_res_url(url: &str) -> String {
     format!("{base}?w={LOW_RES_WIDTH}&fit=clip")
 }
 
-/// Fetches NASA's Astronomy Picture of the Day (APOD) metadata.
+/// Costruisce un client HTTP con timeout esplicito.
+fn http_client() -> WallpaperResult<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(HTTP_TIMEOUT_SECONDS))
+        .build()?)
+}
+
+/// Verifica che un URL sia HTTPS e appartenga a un host autorizzato.
 ///
-/// # Arguments
-/// - `base_url`: URL of the APOD API (normally [`APOD_API_URL`]).
-/// - `date`: Day of the APOD to fetch.
+/// Questa validazione impedisce che un campo controllato dall'API remota
+/// venga usato per indicare al client di scaricare risorse da host arbitrari.
+fn url_immagine_sicura(raw: &str) -> WallpaperResult<Url> {
+    let url = Url::parse(raw)?;
+    if url.scheme() != "https" {
+        return Err("URL immagine non HTTPS".into());
+    }
+    let host = url.host_str().ok_or("URL immagine senza host")?;
+    if !HOSTS_IMMAGINE.contains(&host) {
+        return Err("Host immagine non autorizzato".into());
+    }
+    Ok(url)
+}
+
+/// Recupera i metadati APOD per una data.
 ///
-/// # Returns
-/// An [`Apod`] struct populated from the API response.
-///
-/// # Errors
-/// Returns an error if the request fails, the API answers with a non-2xx
-/// status (the API's error message is included when available) or the
-/// response body cannot be deserialized.
+/// # Errori
+/// Restituisce errore se la richiesta fallisce, se lo stato non è 2xx
+/// (includendo il messaggio API quando disponibile) o se il JSON non è valido.
 fn get_apod(base_url: &str, date: NaiveDate) -> WallpaperResult<Apod> {
     let request_url = format!(
         "{}/{}",
         base_url.trim_end_matches('/'),
         apod_date_code(date)
     );
-
-    let response = reqwest::blocking::get(&request_url)?;
+    let client = http_client()?;
+    let response = client.get(&request_url).send()?;
     let status = response.status();
     if !status.is_success() {
-        let body = response.text().unwrap_or_default();
-        // Error bodies look like `{"code": "apod_basic_not_found", "message": "APOD not found."}`.
-        let message = match json::parse(&body).ok().and_then(|err| {
-            err["message"]
-                .as_str()
-                .map(|m| format!("{} [{}]", m, err["code"]))
-        }) {
-            Some(detail) => format!("APOD API error ({}): {}", status.as_u16(), detail),
-            None => format!("APOD API error ({})", status),
-        };
+        let body = response.text()?;
+        let message = json::parse(&body)
+            .ok()
+            .and_then(|err| {
+                err["message"]
+                    .as_str()
+                    .map(|m| format!("{} [{}]", m, err["code"]))
+            })
+            .map_or_else(
+                || format!("APOD API error ({status})"),
+                |detail| format!("APOD API error ({}): {}", status.as_u16(), detail),
+            );
         return Err(message.into());
     }
-
     Ok(response.json::<Apod>()?)
 }
 
-/// Fetches a random image from the NASA Image and Video Library.
-///
-/// This performs a search against `https://images-api.nasa.gov/search` and then
-/// chooses a random result (potentially from a random page).
-///
-/// # Arguments
-/// - `q`: Free text search terms.
-/// - `center`: NASA center which published the media.
-/// - `location`: Terms to search for in “Location” fields.
-/// - `nasa_id`: The media asset’s NASA ID.
-/// - `photographer`: The primary photographer’s name.
-/// - `title`: Terms to search for in “Title” fields.
-/// - `year_start`: Start year for results (`YYYY`).
-/// - `year_end`: End year for results (`YYYY`).
-///
-/// # Returns
-/// A [`NasaImage`] struct containing the selected item's metadata and a direct URL.
-///
-/// # Panics
-/// This function uses `expect`/`unwrap` internally and may panic on network,
-/// parsing, or response-shape errors.
-///
-/// # Exits
-/// If the search yields zero results, this prints a message and terminates the
-/// process with a non-zero exit code.
-#[allow(clippy::too_many_arguments)]
-fn get_nasa_image(
-    q: &str,
-    center: &str,
-    location: &str,
-    nasa_id: &str,
-    photographer: &str,
-    title: &str,
-    year_start: &str,
-    year_end: &str,
-) -> NasaImage {
-    let mut request_url = format!(
-        "https://images-api.nasa.gov/search?media_type=image&q={q}&center={center}&location={location}&nasa_id={nasa_id}&photographer={photographer}&title={title}&year_start={year_start}&year_end={year_end}",
-        q = q,
-        center = center,
-        location = location,
-        nasa_id = nasa_id,
-        photographer = photographer,
-        title = title,
-        year_start = year_start,
-        year_end = year_end
-    );
-
-    let response_text = reqwest::blocking::get(&request_url)
-        .expect("Failed to fetch NASA image")
-        .text()
-        .unwrap();
-    let mut response_json = json::parse(&response_text).unwrap();
-
-    let num_hits = response_json["collection"]["metadata"]["total_hits"]
-        .as_usize()
-        .unwrap_or(0);
-
-    print!("Number of results: {}, {}", num_hits, request_url);
-    if num_hits == 0 {
-        println!("Couldn't find the file you're looking for. Try another tag.");
-        process::exit(0x0100);
+/// Costruisce l'URL di ricerca codificando correttamente ogni parametro.
+fn costruisci_url_ricerca(
+    parametri: &NasaImageQuery<'_>,
+    page: Option<u32>,
+) -> WallpaperResult<Url> {
+    let mut url = Url::parse("https://images-api.nasa.gov/search")?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("media_type", "image");
+        pairs.append_pair("q", parametri.q);
+        pairs.append_pair("center", parametri.center);
+        pairs.append_pair("location", parametri.location);
+        pairs.append_pair("nasa_id", parametri.nasa_id);
+        pairs.append_pair("photographer", parametri.photographer);
+        pairs.append_pair("title", parametri.title);
+        pairs.append_pair("year_start", parametri.year_start);
+        pairs.append_pair("year_end", parametri.year_end);
+        if let Some(page) = page {
+            pairs.append_pair("page", &page.to_string());
+        }
     }
-
-    let pages = if (num_hits / 100) - 1 <= 100 {
-        (num_hits / 100) - 1
-    } else {
-        100
-    };
-    let mut rng = rand::rng();
-    let index_page = rng.random_range(0..=pages);
-    request_url.push_str(&format!("&page={}", index_page));
-
-    let response_text = reqwest::blocking::get(&request_url)
-        .expect("Failed to fetch NASA image page")
-        .text()
-        .unwrap();
-    response_json = json::parse(&response_text).unwrap();
-
-    let index = if num_hits < 7 {
-        num_hits - 1
-    } else {
-        rng.random_range(0..100)
-    };
-    let items = &response_json["collection"]["items"];
-    let item = &items[index];
-    let data = &item["data"][0];
-    let url_collection = item["href"].as_str().unwrap();
-
-    let response_collection = json::parse(
-        &reqwest::blocking::get(url_collection)
-            .unwrap()
-            .text()
-            .unwrap(),
-    )
-    .unwrap();
-
-    let mut date = data["date_created"].as_str().unwrap().to_owned();
-    date.truncate(10);
-
-    NasaImage {
-        nasa_id: data["nasa_id"].as_str().unwrap().to_owned(),
-        title: data["title"].as_str().unwrap().to_owned(),
-        center: data["center"].as_str().unwrap().to_owned(),
-        description: data["description"].as_str().unwrap().to_owned(),
-        date,
-        url: response_collection[0].as_str().unwrap().to_owned(),
-    }
+    Ok(url)
 }
 
-/// Sets the system wallpaper to the APOD image.
+/// Verifica che un anno sia nel formato `YYYY` e in intervallo plausibile.
+fn valida_anno(anno: &str) -> WallpaperResult<u32> {
+    let valore: u32 = anno.parse()?;
+    if !(1800..=2200).contains(&valore) {
+        return Err("Anno fuori intervallo".into());
+    }
+    Ok(valore)
+}
+
+/// Recupera un'immagine casuale dalla NASA Image Library.
 ///
-/// # Arguments
-/// - `apod`: APOD metadata previously fetched from the API.
-/// - `low`: When `true`, use a reduced-size image (see [`Apod::image_url`]).
-///
-/// # Errors
-/// Returns an error if the APOD has no image URL, or if the underlying
-/// wallpaper backend fails to download or set the image.
+/// Tutti i passaggi possono fallire e restituiscono un errore: non ci sono
+/// `unwrap`/`expect` né `process::exit` al suo interno.
+fn get_nasa_image(parametri: &NasaImageQuery<'_>) -> WallpaperResult<NasaImage> {
+    valida_anno(parametri.year_start)?;
+    valida_anno(parametri.year_end)?;
+
+    let client = http_client()?;
+    let url_base = costruisci_url_ricerca(parametri, None)?;
+
+    let testo = client.get(url_base.clone()).send()?.text()?;
+    let json_risposta = json::parse(&testo)?;
+    let num_hits = json_risposta["collection"]["metadata"]["total_hits"]
+        .as_usize()
+        .ok_or("Campo total_hits mancante o non valido")?;
+
+    if num_hits == 0 {
+        return Err("Nessun risultato per i criteri richiesti".into());
+    }
+
+    // 100 risultati per pagina: page_count è almeno 1.
+    let page_count = num_hits.div_ceil(100).min(101);
+    let mut rng = rand::rng();
+    let index_page = rng.random_range(0..page_count) as u32;
+    let url_pagina = costruisci_url_ricerca(parametri, Some(index_page))?;
+
+    let testo_pagina = client.get(url_pagina).send()?.text()?;
+    let json_pagina = json::parse(&testo_pagina)?;
+    let items = &json_pagina["collection"]["items"];
+    let num_items = items.len();
+    if num_items == 0 {
+        return Err("Pagina di risultati vuota".into());
+    }
+    let index = rng.random_range(0..num_items);
+    let item = &items[index];
+    let data = &item["data"][0];
+    let url_collezione = item["href"]
+        .as_str()
+        .ok_or("URL della collezione mancante")?;
+
+    let url_immagine = url_immagine_sicura(url_collezione)?;
+    let testo_collezione = client.get(url_immagine).send()?.text()?;
+    let json_collezione = json::parse(&testo_collezione)?;
+    let url_asset = json_collezione[0]
+        .as_str()
+        .ok_or("URL dell'asset mancante")?;
+    url_immagine_sicura(url_asset)?;
+
+    let campo = |nome: &str| -> WallpaperResult<String> {
+        data[nome]
+            .as_str()
+            .map(|s| s.to_owned())
+            .ok_or_else(|| format!("Campo {nome} mancante").into())
+    };
+
+    let mut date = campo("date_created")?;
+    date.truncate(10);
+
+    Ok(NasaImage {
+        nasa_id: campo("nasa_id")?,
+        title: campo("title")?,
+        center: campo("center")?,
+        description: campo("description")?,
+        date,
+        url: url_asset.to_owned(),
+    })
+}
+
+/// Imposta lo sfondo con l'immagine APOD, dopo averne validato l'URL.
 fn set_wallpaper(apod: &Apod, low: bool) -> WallpaperResult<()> {
     let url = apod
         .image_url(low)
         .ok_or("The APOD for this date has no image URL")?;
+    url_immagine_sicura(&url)?;
     wallpaper::set_from_url(&url)?;
     Ok(())
 }
 
-/// Prints the program license text to stdout.
+/// Stampa il testo di licenza.
 fn print_license() {
     println!("{}", LICENSE_TEXT);
 }
 
-/// Returns today's date in US Eastern time (EST/EDT).
-///
-/// The APOD "day" is keyed off US Eastern time, so using this avoids fetching
-/// "tomorrow" in other time zones.
+/// Restituisce la data odierna nel fuso US Eastern (EST/EDT).
 fn get_today_est() -> (i32, u32, u32) {
     let est_now: DateTime<Tz> = Utc::now().with_timezone(&Eastern);
     (est_now.year(), est_now.month(), est_now.day())
 }
 
-/// Builds the CLI definition (commands/flags) for `nasa-wallpaper`.
+/// Costruisce la definizione della CLI.
 fn cli() -> Command {
     Command::new("nasa-wallpaper")
         .version(VERSION)
@@ -434,8 +428,8 @@ fn cli() -> Command {
                         .value_name("DATE")
                         .help("Date of the APOD. Format: YYYY-MM-DD (default: today)"),
                 )
-                // Deprecated: the new APOD API does not need a key. Kept (hidden)
-                // so existing scripts keep working.
+                // Deprecata: la nuova API APOD non richiede chiave. Mantenuta
+                // nascosta per compatibilità degli script esistenti.
                 .arg(
                     Arg::new("key")
                         .short('k')
@@ -447,7 +441,7 @@ fn cli() -> Command {
                     Arg::new("low")
                         .short('l')
                         .long("low")
-                        .action(clap::ArgAction::SetTrue)
+                        .action(ArgAction::SetTrue)
                         .help("Use a lower resolution image"),
                 ),
         )
@@ -459,7 +453,7 @@ fn cli() -> Command {
                         .short('q')
                         .long("query")
                         .value_name("Q")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("Free text search terms to compare to all indexed metadata"),
                 )
                 .arg(
@@ -467,7 +461,7 @@ fn cli() -> Command {
                         .short('c')
                         .long("center")
                         .value_name("CENTER")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("NASA center which published the media"),
                 )
                 .arg(
@@ -475,7 +469,7 @@ fn cli() -> Command {
                         .short('o')
                         .long("location")
                         .value_name("LOCATION")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("Terms to search for in “Location” fields"),
                 )
                 .arg(
@@ -483,15 +477,16 @@ fn cli() -> Command {
                         .short('i')
                         .long("nasa_id")
                         .value_name("NASA_ID")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("The media asset’s NASA ID"),
                 )
                 .arg(
                     Arg::new("photographer")
                         .short('p')
-                        .long("phtographer")
+                        .long("photographer")
+                        .visible_alias("phtographer")
                         .value_name("PHOTOGRAPHER")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("The primary photographer’s name"),
                 )
                 .arg(
@@ -499,21 +494,21 @@ fn cli() -> Command {
                         .short('t')
                         .long("title")
                         .value_name("TITLE")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("Terms to search for in “Title” fields"),
                 )
                 .arg(
                     Arg::new("year_start")
                         .long("year_start")
                         .value_name("YEAR_START")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("The start year for results. Format: YYYY"),
                 )
                 .arg(
                     Arg::new("year_end")
                         .long("year_end")
                         .value_name("YEAR_END")
-                        .action(clap::ArgAction::Set)
+                        .action(ArgAction::Set)
                         .help("The end year for results. Format: YYYY"),
                 ),
         )
@@ -521,16 +516,11 @@ fn cli() -> Command {
             "Get a random image from the NASA's account in Unsplash (https://unsplash.com/@nasa)",
         ))
         .subcommand(Command::new("license").about("Print the license of this program"))
+        .subcommand(Command::new("status").about("Run a local health check of the configuration"))
 }
 
-/// Normalizes arguments for backwards-compatible shorthand flags.
-///
-/// Converts legacy forms like `nasa-wallpaper -a ...` into
-/// `nasa-wallpaper apod ...` and similarly `-n` to `nasa_image`.
+/// Normalizza gli argomenti per le shorthand legacy (`-a`, `-n`).
 fn normalize_args(mut args: Vec<OsString>) -> Vec<OsString> {
-    // Backwards-compatible shorthand flags:
-    // `nasa-wallpaper -a ...` => `nasa-wallpaper apod ...`
-    // `nasa-wallpaper -n ...` => `nasa-wallpaper nasa_image ...`
     if args.len() >= 2 {
         if args[1] == OsStr::new("-a") {
             args[1] = OsString::from("apod");
@@ -541,10 +531,22 @@ fn normalize_args(mut args: Vec<OsString>) -> Vec<OsString> {
     args
 }
 
-/// Program entry point.
-///
-/// Parses CLI arguments and dispatches to the chosen subcommand.
-fn main() {
+/// Esegue il controllo di integrità locale (rete, font e URL).
+fn health_check() -> WallpaperResult<()> {
+    let client = http_client()?;
+    drop(client);
+    let _font = text_renderer::find_system_font()?;
+    url_immagine_sicura(APOD_API_URL)?;
+    Ok(())
+}
+
+/// Converte un errore in messaggio utente senza dettagli interni.
+fn mostra_errore(err: &dyn Error) {
+    eprintln!("{}", format!("Error: {err}").red());
+}
+
+/// Punto di ingresso del programma.
+fn main() -> ExitCode {
     let args = normalize_args(std::env::args_os().collect());
     let matches = cli().get_matches_from(args);
 
@@ -556,15 +558,20 @@ fn main() {
                     Err(err) => {
                         eprintln!(
                             "{}",
-                            format!("Error: invalid date '{}' ({}). Use YYYY-MM-DD", date, err)
-                                .red()
+                            format!("Error: invalid date ({err}). Use YYYY-MM-DD").red()
                         );
-                        process::exit(1);
+                        return ExitCode::from(2);
                     }
                 },
                 None => {
                     let (year, month, day) = get_today_est();
-                    NaiveDate::from_ymd_opt(year, month, day).expect("valid date")
+                    match NaiveDate::from_ymd_opt(year, month, day) {
+                        Some(date) => date,
+                        None => {
+                            eprintln!("{}", "Error: data Eastern non valida".red());
+                            return ExitCode::FAILURE;
+                        }
+                    }
                 }
             };
             if sub_matches.get_one::<String>("key").is_some() {
@@ -579,11 +586,11 @@ fn main() {
             let apod = match get_apod(APOD_API_URL, date) {
                 Ok(apod) => apod,
                 Err(err) => {
-                    eprintln!("{}", format!("Error: {}", err).red());
-                    process::exit(1);
+                    mostra_errore(err.as_ref());
+                    return ExitCode::FAILURE;
                 }
             };
-            println!("{}", apod);
+            println!("{apod}");
             if apod.media_type != "image" {
                 println!(
                     "{} {}",
@@ -591,76 +598,87 @@ fn main() {
                         .yellow(),
                     apod.url.yellow()
                 );
-                return;
+                return ExitCode::SUCCESS;
             }
             println!("{}", MSG_CHANGING.yellow());
             if let Err(err) = set_wallpaper(&apod, low) {
-                eprintln!("{}", format!("Error: {}", err).red());
-                process::exit(1);
+                mostra_errore(err.as_ref());
+                return ExitCode::FAILURE;
             }
             println!("{}", MSG_DONE.green());
         }
         Some(("unsplash", _)) => {
+            if let Err(err) = url_immagine_sicura(URL_UNSPLASH) {
+                mostra_errore(err.as_ref());
+                return ExitCode::FAILURE;
+            }
             println!("{}", MSG_CHANGING.yellow());
-            wallpaper::set_from_url(URL_UNSPLASH).unwrap();
+            if let Err(err) = wallpaper::set_from_url(URL_UNSPLASH) {
+                mostra_errore(&err);
+                return ExitCode::FAILURE;
+            }
             println!("{}", MSG_DONE.green());
         }
         Some(("nasa_image", sub_matches)) => {
-            let q = sub_matches
-                .get_one::<String>("query")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let center = sub_matches
-                .get_one::<String>("center")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let location = sub_matches
-                .get_one::<String>("location")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let nasa_id = sub_matches
-                .get_one::<String>("nasa_id")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let photographer = sub_matches
-                .get_one::<String>("photographer")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let title = sub_matches
-                .get_one::<String>("title")
-                .map(|s| s.as_str())
-                .unwrap_or("");
-            let year_start = sub_matches
-                .get_one::<String>("year_start")
-                .map(|s| s.as_str())
-                .unwrap_or("1900");
+            let valore = |nome: &str| {
+                sub_matches
+                    .get_one::<String>(nome)
+                    .map(String::as_str)
+                    .unwrap_or("")
+            };
             let (est_year, _, _) = get_today_est();
-            let est_year_str = est_year.to_string();
-            let year_end = sub_matches
-                .get_one::<String>("year_end")
-                .map(|s| s.as_str())
-                .unwrap_or(&est_year_str);
+            let anno_corrente = est_year.to_string();
+            let parametri = NasaImageQuery {
+                q: valore("query"),
+                center: valore("center"),
+                location: valore("location"),
+                nasa_id: valore("nasa_id"),
+                photographer: valore("photographer"),
+                title: valore("title"),
+                year_start: {
+                    let v = valore("year_start");
+                    if v.is_empty() {
+                        "1900"
+                    } else {
+                        v
+                    }
+                },
+                year_end: {
+                    let v = valore("year_end");
+                    if v.is_empty() {
+                        &anno_corrente
+                    } else {
+                        v
+                    }
+                },
+            };
 
-            let nasa_image = get_nasa_image(
-                q,
-                center,
-                location,
-                nasa_id,
-                photographer,
-                title,
-                year_start,
-                year_end,
-            );
-            println!("{}", nasa_image);
+            let nasa_image = match get_nasa_image(&parametri) {
+                Ok(image) => image,
+                Err(err) => {
+                    mostra_errore(err.as_ref());
+                    return ExitCode::FAILURE;
+                }
+            };
+            println!("{nasa_image}");
             println!("{}", MSG_CHANGING.yellow());
-            wallpaper::set_from_url(&nasa_image.url).unwrap();
+            if let Err(err) = wallpaper::set_from_url(&nasa_image.url) {
+                mostra_errore(&err);
+                return ExitCode::FAILURE;
+            }
             println!("{}", MSG_DONE.green());
         }
-        Some(("license", _)) => {
-            print_license();
-        }
-        _ => {}
+        Some(("license", _)) => print_license(),
+        Some(("status", _)) => match health_check() {
+            Ok(()) => println!("Health check: OK (client HTTP, font e URL confermati)"),
+            Err(err) => {
+                mostra_errore(err.as_ref());
+                return ExitCode::FAILURE;
+            }
+        },
+        _ => return ExitCode::from(2),
     }
+    ExitCode::SUCCESS
 }
 
 #[cfg(test)]

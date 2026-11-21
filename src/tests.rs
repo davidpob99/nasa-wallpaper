@@ -1,6 +1,10 @@
+//! Test unitari e test HTTP con mock locale.
+//!
+//! Nessun test contiene segreti o effettua richieste a servizi esterni.
+
 use super::*;
 
-/// Trimmed copy of the real API response for 2026-09-29.
+/// Copia ridotta di una risposta API reale del 2026-09-29.
 const APOD_FIXTURE: &str = r#"{
     "date": "2026-09-29",
     "post_id": 1420794,
@@ -19,14 +23,14 @@ const APOD_FIXTURE: &str = r#"{
 const HDURL: &str = "https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/september/Shrimp_Pawel_2048.jpg?w=2048&h=2560&fit=clip&crop=faces%2Cfocalpoint";
 
 fn date(y: i32, m: u32, d: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    NaiveDate::from_ymd_opt(y, m, d).expect("data di test valida")
 }
 
 fn fixture() -> Apod {
-    serde_json::from_str(APOD_FIXTURE).unwrap()
+    serde_json::from_str(APOD_FIXTURE).expect("fixture APOD valida")
 }
 
-// --- parse_apod_date -------------------------------------------------
+// --- parse_apod_date ---
 
 #[test]
 fn parse_apod_date_accepts_padded_date() {
@@ -56,7 +60,7 @@ fn parse_apod_date_rejects_impossible_date() {
     assert!(parse_apod_date("2026-13-01").is_err());
 }
 
-// --- apod_date_code --------------------------------------------------
+// --- apod_date_code ---
 
 #[test]
 fn apod_date_code_uses_yymmdd() {
@@ -65,7 +69,7 @@ fn apod_date_code_uses_yymmdd() {
     assert_eq!(apod_date_code(date(2000, 1, 1)), "000101");
 }
 
-// --- html_to_text ----------------------------------------------------
+// --- html_to_text ---
 
 #[test]
 fn html_to_text_removes_explanation_label() {
@@ -118,7 +122,7 @@ fn html_to_text_passes_plain_text_through() {
     assert_eq!(html_to_text(""), "");
 }
 
-// --- low_res_url -----------------------------------------------------
+// --- low_res_url ---
 
 #[test]
 fn low_res_url_replaces_query_on_dynamic_images() {
@@ -142,7 +146,7 @@ fn low_res_url_leaves_other_urls_unchanged() {
     assert_eq!(low_res_url(url), url);
 }
 
-// --- Apod::image_url -------------------------------------------------
+// --- Apod::image_url ---
 
 #[test]
 fn image_url_returns_hdurl_by_default() {
@@ -163,7 +167,7 @@ fn image_url_is_none_without_hdurl() {
     assert_eq!(apod.image_url(true), None);
 }
 
-// --- Deserialization -------------------------------------------------
+// --- Deserializzazione ---
 
 #[test]
 fn deserializes_real_api_response() {
@@ -175,7 +179,10 @@ fn deserializes_real_api_response() {
         .url
         .starts_with("https://science.nasa.gov/image-article/"));
     assert_eq!(apod.hdurl.as_deref(), Some(HDURL));
-    assert!(apod.copyright.unwrap().contains("Pawel Piechnik"));
+    assert!(apod
+        .copyright
+        .expect("copyright presente")
+        .contains("Pawel Piechnik"));
 }
 
 #[test]
@@ -183,7 +190,7 @@ fn deserializes_response_without_optional_fields() {
     let apod: Apod = serde_json::from_str(
         r#"{"date":"2026-09-13","title":"T","media_type":"video","url":"https://science.nasa.gov/x/"}"#,
     )
-    .unwrap();
+    .expect("JSON valido");
     assert_eq!(apod.explanation, "");
     assert_eq!(apod.copyright, None);
     assert_eq!(apod.hdurl, None);
@@ -194,12 +201,12 @@ fn deserializes_response_with_null_optional_fields() {
     let apod: Apod = serde_json::from_str(
         r#"{"date":"2026-09-13","title":"T","media_type":"image","url":"u","copyright":null,"hdurl":null}"#,
     )
-    .unwrap();
+    .expect("JSON valido");
     assert_eq!(apod.copyright, None);
     assert_eq!(apod.hdurl, None);
 }
 
-// --- Display ---------------------------------------------------------
+// --- Display ---
 
 #[test]
 fn display_prints_plain_text() {
@@ -216,7 +223,7 @@ fn display_prints_plain_text() {
     assert!(!out.contains("&amp;"));
 }
 
-// --- get_apod (mocked HTTP) ----------------------------------------
+// --- get_apod (mock HTTP) ---
 
 #[test]
 fn get_apod_requests_date_code_and_parses_response() {
@@ -229,7 +236,7 @@ fn get_apod_requests_date_code_and_parses_response() {
         .create();
 
     let base = format!("{}/wp-json/wp/v2/apod-basic/", server.url());
-    let apod = get_apod(&base, date(2026, 9, 29)).unwrap();
+    let apod = get_apod(&base, date(2026, 9, 29)).expect("risposta valida");
 
     mock.assert();
     assert_eq!(apod.title, "Sh2-188: The Shrimp Nebula");
@@ -249,7 +256,7 @@ fn get_apod_reports_api_error_message() {
         .create();
 
     let err = get_apod(&server.url(), date(2030, 1, 1))
-        .unwrap_err()
+        .expect_err("errore atteso")
         .to_string();
 
     assert_eq!(
@@ -268,7 +275,7 @@ fn get_apod_reports_status_when_error_body_is_not_json() {
         .create();
 
     let err = get_apod(&server.url(), date(2026, 9, 29))
-        .unwrap_err()
+        .expect_err("errore atteso")
         .to_string();
 
     assert!(err.starts_with("APOD API error (503"), "{err}");
@@ -291,16 +298,19 @@ fn get_apod_fails_when_server_is_unreachable() {
     assert!(get_apod("http://127.0.0.1:1", date(2026, 9, 29)).is_err());
 }
 
-// --- CLI -------------------------------------------------------------
+// --- CLI ---
 
 #[test]
 fn cli_parses_apod_date_and_low() {
     let matches = cli()
         .try_get_matches_from(["nasa-wallpaper", "apod", "-d", "2026-09-29", "-l"])
-        .unwrap();
-    let (name, sub) = matches.subcommand().unwrap();
+        .expect("CLI valida");
+    let (name, sub) = matches.subcommand().expect("sottocomando presente");
     assert_eq!(name, "apod");
-    assert_eq!(sub.get_one::<String>("date").unwrap(), "2026-09-29");
+    assert_eq!(
+        sub.get_one::<String>("date").expect("data presente"),
+        "2026-09-29"
+    );
     assert!(sub.get_flag("low"));
 }
 
@@ -308,8 +318,11 @@ fn cli_parses_apod_date_and_low() {
 fn cli_low_defaults_to_false() {
     let matches = cli()
         .try_get_matches_from(["nasa-wallpaper", "apod"])
-        .unwrap();
-    assert!(!matches.subcommand_matches("apod").unwrap().get_flag("low"));
+        .expect("CLI valida");
+    assert!(!matches
+        .subcommand_matches("apod")
+        .expect("apod")
+        .get_flag("low"));
 }
 
 #[test]
@@ -320,19 +333,72 @@ fn cli_still_accepts_legacy_api_key() {
             .map(OsString::from)
             .collect(),
     );
-    let matches = cli().try_get_matches_from(args).unwrap();
-    let sub = matches.subcommand_matches("apod").unwrap();
-    assert_eq!(sub.get_one::<String>("key").unwrap(), "DEMO_KEY");
+    let matches = cli().try_get_matches_from(args).expect("CLI valida");
+    let sub = matches.subcommand_matches("apod").expect("apod");
+    assert_eq!(sub.get_one::<String>("key").expect("chiave"), "DEMO_KEY");
 }
 
 #[test]
 fn cli_hides_api_key_from_help() {
     let help = cli()
         .find_subcommand_mut("apod")
-        .unwrap()
+        .expect("apod")
         .render_help()
         .to_string();
     assert!(!help.contains("--key"));
     assert!(help.contains("--date"));
     assert!(help.contains("--low"));
+}
+
+#[test]
+fn cli_exposes_status_health_check() {
+    let matches = cli()
+        .try_get_matches_from(["nasa-wallpaper", "status"])
+        .expect("CLI valida");
+    assert_eq!(matches.subcommand_name(), Some("status"));
+}
+
+// --- Sicurezza URL e validazione ---
+
+#[test]
+fn url_immagine_sicura_accetta_solo_https_autorizzato() {
+    assert!(url_immagine_sicura(HDURL).is_ok());
+    assert!(url_immagine_sicura(URL_UNSPLASH).is_ok());
+    assert!(url_immagine_sicura("http://assets.science.nasa.gov/a.jpg").is_err());
+    assert!(url_immagine_sicura("https://evil.example.org/a.jpg").is_err());
+    assert!(url_immagine_sicura("non-un-url").is_err());
+}
+
+#[test]
+fn costruisci_url_ricerca_codifica_i_parametri() {
+    let parametri = NasaImageQuery {
+        q: "nebula & gas",
+        center: "JPL",
+        year_start: "2020",
+        year_end: "2026",
+        ..NasaImageQuery::default()
+    };
+    let url = costruisci_url_ricerca(&parametri, Some(3)).expect("URL valido");
+    assert_eq!(url.host_str(), Some("images-api.nasa.gov"));
+    assert!(url.as_str().contains("q=nebula+%26+gas"));
+    assert!(url.as_str().contains("page=3"));
+    assert!(!url.as_str().contains("&gas"));
+}
+
+#[test]
+fn valida_anno_rifiuta_valori_non_plausibili() {
+    assert_eq!(valida_anno("2026").unwrap(), 2026);
+    assert!(valida_anno("26").is_err());
+    assert!(valida_anno("9999").is_err());
+    assert!(valida_anno("abc").is_err());
+}
+
+#[test]
+fn get_nasa_image_rifiuta_anni_invalidi_senza_rete() {
+    let parametri = NasaImageQuery {
+        year_start: "abc",
+        year_end: "2026",
+        ..NasaImageQuery::default()
+    };
+    assert!(get_nasa_image(&parametri).is_err());
 }
