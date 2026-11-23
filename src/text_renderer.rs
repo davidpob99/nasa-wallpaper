@@ -80,6 +80,11 @@ where
             }
         }
     }
+    errore_finale(errore)
+}
+
+/// Restituisce l'errore contestualizzato quando nessun font è valido.
+fn errore_finale(errore: Option<anyhow::Error>) -> Result<FontData> {
     match errore {
         Some(err) => Err(err.context("Nessun font di sistema valido trovato")),
         None => bail!("Nessun font di sistema trovato: impostare NASA_WALLPAPER_FONT"),
