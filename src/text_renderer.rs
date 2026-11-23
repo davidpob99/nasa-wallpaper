@@ -10,7 +10,7 @@
 use ab_glyph_rasterizer::{point, Rasterizer};
 use anyhow::{anyhow, bail, Context, Result};
 use image::{GenericImageView, Rgba, RgbaImage};
-use skrifa::{DrawMemory, Font, PathSink, ScalerFont};
+use skrifa::{DrawMemory, Font, GlyphId, PathSink, ScalerFont, ScalerOutline};
 use std::path::{Path, PathBuf};
 use tempfile::{Builder, NamedTempFile};
 
@@ -18,6 +18,24 @@ use tempfile::{Builder, NamedTempFile};
 const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
 /// Lunghezza massima del testo di overlay.
 const MAX_TESTO: usize = 8_192;
+/// Percorsi di font di sistema esaminati in ordine.
+const CANDIDATI_FONT: &[&str] = &[
+    // Windows
+    "C:\\Windows\\Fonts\\segoeui.ttf",
+    "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\calibri.ttf",
+    // Linux (Debian, Ubuntu, Fedora, Arch)
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+    // macOS
+    "/System/Library/Fonts/SFCompact.ttf",
+    "/System/Library/Fonts/SFNS.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/Library/Fonts/Arial.ttf",
+];
 
 /// Carica un font TTF da percorso esplicito, con errori contestualizzati.
 /// `skrifa::Font` possiede i byte del file, quindi non ci sono prestiti da
@@ -26,6 +44,30 @@ fn carica_font(path: &Path) -> Result<Font> {
     let bytes = std::fs::read(path)
         .with_context(|| format!("Impossibile leggere il font {}", path.display()))?;
     Font::new(bytes, 0).ok_or_else(|| anyhow!("Font TTF non valido: {}", path.display()))
+}
+
+/// Prova i percorsi in ordine e restituisce il primo font valido.
+fn carica_da_elenco<I, P>(percorsi: I) -> Result<Font>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    let mut ultimo_errore: Option<anyhow::Error> = None;
+    for percorso in percorsi {
+        let percorso = percorso.as_ref();
+        if percorso.is_file() {
+            match carica_font(percorso) {
+                Ok(font) => return Ok(font),
+                Err(err) => ultimo_errore = Some(err),
+            }
+        }
+    }
+    match ultimo_errore {
+        Some(err) => Err(err).context("Nessun font di sistema valido trovato"),
+        None => bail!(
+            "Nessun font di sistema trovato: impostare NASA_WALLPAPER_FONT a un file TTF valido"
+        ),
+    }
 }
 
 /// Trova un font di sistema utilizzabile.
@@ -38,54 +80,12 @@ pub fn find_system_font() -> Result<Font> {
         return carica_font(&percorso)
             .context("NASA_WALLPAPER_FONT non punta a un font TTF valido");
     }
-
-    let candidate_paths = [
-        // Windows
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\calibri.ttf",
-        // Linux (Debian, Ubuntu, Fedora, Arch)
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
-        // macOS
-        "/System/Library/Fonts/SFCompact.ttf",
-        "/System/Library/Fonts/SFNS.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/Library/Fonts/Arial.ttf",
-    ];
-
-    let mut ultimo_errore: Option<anyhow::Error> = None;
-    for path in &candidate_paths {
-        let percorso = Path::new(path);
-        if !percorso.is_file() {
-            continue;
-        }
-        match carica_font(percorso) {
-            Ok(font) => return Ok(font),
-            Err(err) => ultimo_errore = Some(err),
-        }
-    }
-
+    let mut percorsi: Vec<PathBuf> = CANDIDATI_FONT.iter().map(PathBuf::from).collect();
     #[cfg(target_os = "windows")]
     if let Ok(windir) = std::env::var("WINDIR") {
-        let percorso = Path::new(&windir).join("Fonts").join("arial.ttf");
-        if percorso.is_file() {
-            match carica_font(&percorso) {
-                Ok(font) => return Ok(font),
-                Err(err) => ultimo_errore = Some(err),
-            }
-        }
+        percorsi.push(Path::new(&windir).join("Fonts").join("arial.ttf"));
     }
-
-    match ultimo_errore {
-        Some(err) => Err(err).context("Nessun font di sistema valido trovato"),
-        None => bail!(
-            "Nessun font di sistema trovato: impostare NASA_WALLPAPER_FONT a un file TTF valido"
-        ),
-    }
+    carica_da_elenco(percorsi)
 }
 
 /// Verifica i limiti di dimensione dei dati in ingresso.
@@ -131,6 +131,13 @@ struct RasterSink<'a> {
     baseline_y: f32,
 }
 
+impl RasterSink<'_> {
+    /// Converte una coppia di coordinate di `skrifa` in coordinate del raster.
+    fn trasforma(&self, x: f32, y: f32) -> ab_glyph_rasterizer::Point {
+        point(self.offset_x + x, self.baseline_y - y)
+    }
+}
+
 impl PathSink for RasterSink<'_> {
     fn move_to(&mut self, x: f32, y: f32) {
         self.current = (x, y);
@@ -138,45 +145,33 @@ impl PathSink for RasterSink<'_> {
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
-        let from = point(
-            self.offset_x + self.current.0,
-            self.baseline_y - self.current.1,
-        );
-        let to = point(self.offset_x + x, self.baseline_y - y);
+        let from = self.trasforma(self.current.0, self.current.1);
+        let to = self.trasforma(x, y);
         self.rasterizer.draw_line(from, to);
         self.current = (x, y);
     }
 
     fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
-        let from = point(
-            self.offset_x + self.current.0,
-            self.baseline_y - self.current.1,
-        );
-        let control = point(self.offset_x + cx, self.baseline_y - cy);
-        let to = point(self.offset_x + x, self.baseline_y - y);
+        let from = self.trasforma(self.current.0, self.current.1);
+        let control = self.trasforma(cx, cy);
+        let to = self.trasforma(x, y);
         self.rasterizer.draw_quad(from, control, to);
         self.current = (x, y);
     }
 
     fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-        let from = point(
-            self.offset_x + self.current.0,
-            self.baseline_y - self.current.1,
-        );
-        let control0 = point(self.offset_x + cx0, self.baseline_y - cy0);
-        let control1 = point(self.offset_x + cx1, self.baseline_y - cy1);
-        let to = point(self.offset_x + x, self.baseline_y - y);
+        let from = self.trasforma(self.current.0, self.current.1);
+        let control0 = self.trasforma(cx0, cy0);
+        let control1 = self.trasforma(cx1, cy1);
+        let to = self.trasforma(x, y);
         self.rasterizer.draw_cubic(from, control0, control1, to);
         self.current = (x, y);
     }
 
     fn close(&mut self) {
         if let Some(start) = self.start {
-            let from = point(
-                self.offset_x + self.current.0,
-                self.baseline_y - self.current.1,
-            );
-            let to = point(self.offset_x + start.0, self.baseline_y - start.1);
+            let from = self.trasforma(self.current.0, self.current.1);
+            let to = self.trasforma(start.0, start.1);
             self.rasterizer.draw_line(from, to);
             self.current = start;
             self.start = None;
@@ -184,82 +179,62 @@ impl PathSink for RasterSink<'_> {
     }
 }
 
-/// Disegna testo bianco in posizione (x0, y0), gestendo le interruzioni di riga.
-fn disegna_testo(
-    immagine: &mut RgbaImage,
-    font: &Font,
-    x0: i32,
-    y0: i32,
-    size: f32,
-    testo: &str,
-) -> Result<()> {
-    let glyph_ids: Vec<_> = {
-        let charmap = font.charmap();
-        testo.chars()
-            .map(|c| charmap.map_unicode(c).unwrap_or_default())
-            .collect()
-    };
-    let scaler = ScalerFont::unhinted(font.clone(), Some(size));
+/// Parametri di geometria per la rasterizzazione di un singolo glyph.
+struct Contorno {
+    larghezza: usize,
+    altezza: usize,
+    offset_x: f32,
+    baseline_offset: f32,
+}
 
-    // Un glyph può arrivare a ~3 em di avanzamento; margini generosi evitano
-    // di troncare contorni con ascensori particolarmente alti.
-    let larghezza = (size * 3.0).ceil() as usize + 8;
-    let altezza = (size * 2.0).ceil() as usize + 8;
-    let offset_x = 3.0_f32;
-    let baseline_offset = size * 1.25;
-    let interlinea = (size * 1.25).round() as i32;
-
-    let mut pen_x = 0.0_f32;
-    let mut pen_y = 0.0_f32;
-
-    for (ch, glyph_id) in testo.chars().zip(glyph_ids) {
-        if ch == '\n' {
-            pen_x = 0.0;
-            pen_y += interlinea as f32;
-            continue;
+impl Contorno {
+    /// Un glyph può arrivare a ~3 em di avanzamento: margini generosi evitano
+    /// di troncare contorni con ascensori particolarmente alti.
+    fn nuovo(size: f32) -> Self {
+        Self {
+            larghezza: (size * 3.0).ceil() as usize + 8,
+            altezza: (size * 2.0).ceil() as usize + 8,
+            offset_x: 3.0,
+            baseline_offset: size * 1.25,
         }
-        let Some(outline) = scaler.outline(glyph_id) else {
-            continue;
-        };
-        let mut raster = Rasterizer::new(larghezza, altezza);
-        let advance = {
-            let mut sink = RasterSink {
-                rasterizer: &mut raster,
-                current: (0.0, 0.0),
-                start: None,
-                offset_x,
-                baseline_y: baseline_offset,
-            };
-            let metriche = outline
-                .draw(DrawMemory::Scratch, &mut sink)
-                .context("Disegno del contorno del glyph non riuscito")?;
-            metriche.h_advance.unwrap_or(size * 0.6)
-        };
-        let base_x = x0 as f32 + pen_x;
-        let base_y = y0 as f32 + pen_y + baseline_offset;
+    }
 
+    /// Disegna il contorno e restituisce la maschera con il suo avanzamento.
+    fn rasterizza(&self, outline: ScalerOutline<'_>, size: f32) -> Result<(Rasterizer, f32)> {
+        let mut raster = Rasterizer::new(self.larghezza, self.altezza);
+        let mut sink = RasterSink {
+            rasterizer: &mut raster,
+            current: (0.0, 0.0),
+            start: None,
+            offset_x: self.offset_x,
+            baseline_y: self.baseline_offset,
+        };
+        let metriche = outline
+            .draw(DrawMemory::Scratch, &mut sink)
+            .context("Disegno del contorno del glyph non riuscito")?;
+        Ok((raster, metriche.h_advance.unwrap_or(size * 0.6)))
+    }
+
+    /// Compone la maschera del glyph sull'immagine, sfumando il bianco.
+    fn componi(&self, immagine: &mut RgbaImage, raster: &Rasterizer, base: (f32, f32)) {
         raster.for_each_pixel_2d(|px, py, alpha| {
             let copertura = alpha.clamp(0.0, 1.0);
             if copertura <= 0.0 {
                 return;
             }
-            let dest_x = (base_x + px as f32 - offset_x).round() as i32;
-            let dest_y = (base_y + py as f32 - baseline_offset).round() as i32;
-            if dest_x < 0 || dest_y < 0 {
+            let x = (base.0 + px as f32 - self.offset_x).round() as i32;
+            let y = (base.1 + py as f32 - self.baseline_offset).round() as i32;
+            if x < 0 || y < 0 || x >= immagine.width() as i32 || y >= immagine.height() as i32 {
                 return;
             }
-            if dest_x >= immagine.width() as i32 || dest_y >= immagine.height() as i32 {
-                return;
-            }
-            let x = dest_x as u32;
-            let y = dest_y as u32;
-            let sfondo = immagine.get_pixel(x, y).0;
+            let pixel = (x as u32, y as u32);
+            let sfondo = immagine.get_pixel(pixel.0, pixel.1).0;
             let mescola = |canale: u8| -> u8 {
                 (f32::from(canale) * (1.0 - copertura) + 255.0 * copertura).round() as u8
             };
             immagine.put_pixel(
-                x,
-                y,
+                pixel.0,
+                pixel.1,
                 Rgba([
                     mescola(sfondo[0]),
                     mescola(sfondo[1]),
@@ -268,6 +243,51 @@ fn disegna_testo(
                 ]),
             );
         });
+    }
+}
+
+/// Mappa i caratteri del testo agli identificatori di glyph del font.
+fn mappa_glyph(font: &Font, testo: &str) -> Vec<GlyphId> {
+    let charmap = font.charmap();
+    testo.chars()
+        .map(|c| charmap.map_unicode(c).unwrap_or_default())
+        .collect()
+}
+
+/// Parametri di una richiesta di disegno testuale.
+struct RichiestaTesto<'a> {
+    immagine: &'a mut RgbaImage,
+    font: &'a Font,
+    x0: i32,
+    y0: i32,
+    size: f32,
+    testo: &'a str,
+}
+
+/// Disegna testo bianco gestendo le interruzioni di riga.
+fn disegna_testo(richiesta: RichiestaTesto<'_>) -> Result<()> {
+    let glyphs = mappa_glyph(richiesta.font, richiesta.testo);
+    let scaler = ScalerFont::unhinted(richiesta.font.clone(), Some(richiesta.size));
+    let contorno = Contorno::nuovo(richiesta.size);
+    let interlinea = (richiesta.size * 1.25).round() as i32;
+    let mut pen_x = 0.0_f32;
+    let mut pen_y = 0.0_f32;
+
+    for (ch, glyph_id) in richiesta.testo.chars().zip(glyphs) {
+        if ch == '\n' {
+            pen_x = 0.0;
+            pen_y += interlinea as f32;
+            continue;
+        }
+        let Some(outline) = scaler.outline(glyph_id) else {
+            continue;
+        };
+        let (raster, advance) = contorno.rasterizza(outline, richiesta.size)?;
+        let base = (
+            richiesta.x0 as f32 + pen_x,
+            richiesta.y0 as f32 + pen_y,
+        );
+        contorno.componi(&mut *richiesta.immagine, &raster, base);
         pen_x += advance;
     }
     Ok(())
@@ -286,14 +306,14 @@ fn disegna_titolo(
     stile: &StileTesto<'_>,
     title: &str,
 ) -> Result<()> {
-    disegna_testo(
+    disegna_testo(RichiestaTesto {
         immagine,
-        stile.font,
-        30,
-        box_y as i32 + 20,
-        stile.font_size,
-        title,
-    )
+        font: stile.font,
+        x0: 30,
+        y0: box_y as i32 + 20,
+        size: stile.font_size,
+        testo: title,
+    })
 }
 
 /// Adatta la spiegazione alla larghezza dell'immagine.
@@ -312,8 +332,14 @@ fn disegna_spiegazione(
 ) -> Result<()> {
     let wrapped = spiegazione_a_capo(img, st, text);
     let y = y0 as i32 + 20 + (st.font_size * 1.5) as i32;
-    let scala = st.font_size * 0.85;
-    disegna_testo(img, st.font, 30, y, scala, &wrapped)
+    disegna_testo(RichiestaTesto {
+        immagine: img,
+        font: st.font,
+        x0: 30,
+        y0: y,
+        size: st.font_size * 0.85,
+        testo: &wrapped,
+    })
 }
 
 /// Verifica che l'immagine abbia dimensioni non nulle.
@@ -389,6 +415,29 @@ mod tests {
     #[test]
     fn font_non_valido_viene_rifiutato() {
         assert!(Font::new(&[0u8; 32][..], 0).is_none());
+    }
+
+    #[test]
+    fn disegna_testo_produce_pixel_visibili() {
+        let Ok(font) = find_system_font() else {
+            println!("Nessun font di sistema: test di rendering non applicabile");
+            return;
+        };
+        let mut immagine = RgbaImage::from_pixel(640, 360, Rgba([0, 0, 0, 255]));
+        disegna_testo(RichiestaTesto {
+            immagine: &mut immagine,
+            font: &font,
+            x0: 20,
+            y0: 100,
+            size: 20.0,
+            testo: "NASA",
+        })
+        .expect("disegno del testo");
+        let visibili = immagine
+            .pixels()
+            .filter(|p| p.0[0] > 128 && p.0[1] > 128 && p.0[2] > 128)
+            .count();
+        assert!(visibili > 0, "il testo non ha prodotto pixel visibili");
     }
 
     #[test]

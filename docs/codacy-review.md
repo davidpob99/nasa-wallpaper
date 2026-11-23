@@ -1,4 +1,4 @@
-Revisione finding Codacy — nasa-wallpaper
+# Revisione finding Codacy — nasa-wallpaper
 
 Data: 2026-11-22. Fonte: API Codacy v3, `gh/LightYagami28/nasa-wallpaper`.
 Metodo: `POST .../issues/overview` e `POST .../issues/search` con cursori,
