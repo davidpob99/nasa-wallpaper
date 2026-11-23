@@ -16,3 +16,7 @@ wallpaper.jpg
 # Local environment and logs
 .env
 *.log
+
+# Local tool caches
+.scannerwork/
+.codacy/
