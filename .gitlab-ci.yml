@@ -1,0 +1,20 @@
+stages:
+  - verify
+
+default:
+  image: rust:1.85
+  interruptible: true
+
+variables:
+  CARGO_TERM_COLOR: "never"
+
+verify:
+  stage: verify
+  script:
+    - rustup component add rustfmt clippy
+    - cargo fmt --check
+    - cargo clippy --all-targets -- -D warnings
+    - cargo test --locked
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "master"'
