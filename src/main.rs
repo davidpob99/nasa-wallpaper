@@ -12,7 +12,7 @@ use jiff::civil::Date;
 use jiff::Timestamp;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use colored::Colorize;
-use rand::Rng;
+use rand::RngExt;
 use reqwest::Url;
 use std::error::Error;
 use std::fmt;
