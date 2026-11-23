@@ -1,0 +1,12 @@
+{
+  "MD041": true,
+  "MD043": {
+    "headings": [
+      "# Revisione finding Codacy — nasa-wallpaper",
+      "## Conteggi",
+      "## Falsi positivi accertati",
+      "## Finding reali"
+    ],
+    "match_case": true
+  }
+}
